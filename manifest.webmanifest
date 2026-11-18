@@ -1,0 +1,17 @@
+{
+  "name": "諾文小鎮",
+  "short_name": "諾文小鎮",
+  "description": "時間融合時代 × 蓋亞聯邦 EL-7：看看諾文的居民正在做什麼。",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F3EEE4",
+  "theme_color": "#F3EEE4",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

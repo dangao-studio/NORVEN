@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>諾文小鎮</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="時間融合時代 × 蓋亞聯邦 EL-7：看看諾文的居民正在做什麼。">
+<meta name="theme-color" content="#F3EEE4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="諾文小鎮">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<script>(function(){var h=new Date().getHours()+new Date().getMinutes()/60;if(h>=19||h<5.5)document.documentElement.classList.add("dark");})();</script>
+<div id="splash" class="splash" aria-live="polite">
+  <div class="sp-inner">
+    <div class="sp-mark" aria-hidden="true">諾</div>
+    <div class="sp-title">諾文小鎮</div>
+    <div class="sp-sub">時間融合時代・蓋亞聯邦 EL-7</div>
+    <canvas id="spWalk" class="sp-walk" width="300" height="70" aria-hidden="true"></canvas>
+    <div class="sp-bar"><i id="spFill"></i></div>
+    <div class="sp-step" id="spStep">打開小鎮的門……</div>
+    <div class="sp-tip" id="spTip"></div>
+  </div>
+</div>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">諾</span>
+      <span class="brand-text">諾文小鎮<small>EL-7</small></span>
+    </div>
+    <button class="clock-chip" id="clockChip" type="button" aria-label="時間與設定">
+      <span id="clockText">--</span>
+    </button>
+    <button class="icon-btn music-btn" id="musicBtn" type="button" aria-label="播放 lofi 音樂">🎵</button>
+    <button class="icon-btn bell-btn" id="bellBtn" type="button" aria-label="小鎮動態通知">🔔<span class="bell-n" id="bellN" hidden></span></button>
+    <button class="icon-btn" id="settingsBtn" type="button" aria-label="設定">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.47.47 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
+    </button>
+  </header>
+  <div class="preview-banner" id="previewBanner" hidden>小鎮時間・進度與台灣時間分開保存</div>
+
+  <button class="news-banner" id="newsBanner" type="button" hidden></button>
+  <main id="view" class="view" tabindex="-1"></main>
+
+  <button class="observing-pill" id="obsPill" type="button" hidden></button>
+
+  <nav class="tabbar" aria-label="主要導覽">
+    <button type="button" data-nav="town" class="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="currentColor"/></svg>
+      <span>小鎮</span></button>
+    <button type="button" data-nav="residents" class="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5" fill="currentColor"/><path d="M2.5 20c0-3.8 2.9-6.5 6.5-6.5s6.5 2.7 6.5 6.5z" fill="currentColor"/><circle cx="17" cy="9" r="2.8" fill="currentColor" opacity=".55"/><path d="M15.5 13.6c3.3-.4 6 1.9 6 5.4h-4.3c0-2-.6-3.8-1.7-5.4z" fill="currentColor" opacity=".55"/></svg>
+      <span>居民</span></button>
+    <button type="button" data-nav="log" class="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h10l4 4v13a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2 7v2h8v-2zm0 4v2h6v-2z" fill="currentColor"/></svg>
+      <span>日誌</span></button>
+  </nav>
+
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+  <section class="sheet" id="sheet" role="dialog" aria-modal="true" hidden>
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </section>
+  <div class="toast" id="toast" role="status" hidden></div>
+</div>
+
+<noscript>這個小鎮需要開啟 JavaScript 才能運作。</noscript>
+
+<script src="data/characters.js"></script>
+<script src="data/locations.js"></script>
+<script src="data/schedules.js"></script>
+<script src="data/events-new.js"></script>
+<script src="data/events-more.js"></script>
+<script src="data/events-solo.js"></script>
+<script src="data/voices.js"></script>
+<script src="data/voices-b.js"></script>
+<script src="data/relations.js"></script>
+<script src="data/phone.js"></script>
+<script src="data/phone-voices.js"></script>
+<script src="data/festivals.js"></script>
+<script src="data/floorplans.js"></script>
+<script src="data/interiors.js"></script>
+<script src="data/diary.js"></script>
+<script src="data/skins.js"></script>
+<script src="js/splash.js"></script>
+<script src="data/events-original.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/lofi.js"></script>
+<script src="js/picto.js"></script>
+<script src="js/blocky.js"></script>
+<script src="js/life.js"></script>
+<script src="js/voxroom.js"></script>
+<script src="js/voxtown.js"></script>
+<script src="js/town3d.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
