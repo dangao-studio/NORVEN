@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>諾文小鎮・高畫質試做</title>
+<style>html,body{margin:0;height:100%;background:#BFE0EC;overflow:hidden;font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif}#v{position:fixed;inset:0}#h{position:fixed;left:12px;top:10px;padding:6px 12px;border-radius:10px;background:rgba(255,255,255,.75);font-size:13px;color:#333}</style></head>
+<body><div id="v"></div><div id="h">高畫質試做・拖曳旋轉、滾輪縮放</div>
+<script src="vendor/three.min.js"></script>
+<script src="data/skins.js"></script>
+<script src="js/blocky.js"></script>
+<script src="js/voxroom.js"></script>
+<script src="data/interiors.js"></script>
+<script src="data/interiors-extra.js"></script>
+<script src="js/proto.js"></script>
+<script src="js/proto-mix.js"></script>
+<script>(new URLSearchParams(location.search).get("scene") === "mix" ? NOVUM.protoMix : NOVUM.proto).start(document.getElementById("v"));</script>
+</body></html>

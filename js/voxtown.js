@@ -2,7 +2,7 @@
  * 小鎮的建築、院子、人行道都用 0.125 的小方塊堆出來，再合併成網格。
  * 為了手機跑得動：
  *   ・同一平面上顏色和角落陰影都一樣的相鄰面合成一塊（貪婪合併）
- *   ・朝下的面不畫（鏡頭永遠在上方）
+ *   ・朝下的面只有貼地的不畫（第一人稱會從樹冠、遮雨棚下面往上看）
  *   ・雜色用「好幾格一起變色」，才合併得起來
  * 窗戶玻璃、燈另外做成會在夜裡發光的網格。
  * 介面：N.voxTown.lot(T, l, info) 回傳一個地點的網格；N.voxTown.block(T, x0, z0, info) 回傳一個街區的人行道。 */
@@ -168,26 +168,24 @@
   /* ───── 一棟建築：牆、窗、門、屋頂 ─────
    * o: x0,z0,w,d,h（格）、wall(色或函式)、roof: gable|flat、roofC:[c1,c2]、
    *    floors（每層高度）、winW、winH、shutter、box、door:{c,w}、lit（一樓大窗） */
+  /* 比例：一格 0.2 公尺（小鎮 1 單位 = 1.6 公尺），人 1.6 公尺 = 8 格。
+   * 一層樓 15 格（3 公尺）、店門 10 格（2 公尺）、住家門 9 格（1.8 公尺，比人高一點）。 */
   function building(o) {
     const x0 = o.x0, z0 = o.z0, x1 = x0 + o.w, z1 = z0 + o.d, h = o.h;
     const wf = typeof o.wall === "function" ? o.wall : () => o.wall;
     shell(x0, 1, z0, x1, h, z1, wf);
-    const F = faceZ(x0, z1 - 1, 1), floorH = o.floorH || 16;
-    // 一樓：門＋窗（或大櫥窗）
-    const dw = (o.door && o.door.w) || 6, du = (o.door && o.door.u != null) ? o.door.u : ((o.w - dw) >> 1);
-    door(F, du, dw, 14, (o.door && o.door.c) || 0x5A3A28);
-    if (o.lit) { windowOn(F, 3, 4, du - 6, 9, { frame: o.frame }); windowOn(F, du + dw + 3, 4, o.w - du - dw - 6, 9, { frame: o.frame }); }
-    else if (o.w >= 24) { windowOn(F, Math.max(3, du - 9), 5, 5, 7, { frame: o.frame, shutter: o.shutter }); windowOn(F, du + dw + 4, 5, 5, 7, { frame: o.frame, shutter: o.shutter }); }
-    // 樓上
+    const F = faceZ(x0, z1 - 1, 1), floorH = o.floorH || 15;
+    const dw = (o.door && o.door.w) || 5, dh = (o.door && o.door.h) || 10, du = (o.door && o.door.u != null) ? o.door.u : ((o.w - dw) >> 1);
+    door(F, du, dw, dh, (o.door && o.door.c) || 0x5A3A28);
+    if (o.lit) { windowOn(F, 3, 3, du - 6, 8, { frame: o.frame }); windowOn(F, du + dw + 3, 3, o.w - du - dw - 6, 8, { frame: o.frame }); }
+    else if (o.w >= 22) { windowOn(F, Math.max(3, du - 9), 4, 5, 6, { frame: o.frame, shutter: o.shutter, box: o.box }); windowOn(F, du + dw + 4, 4, 5, 6, { frame: o.frame, shutter: o.shutter, box: o.box }); }
     const ww = o.winW || 5, wh = o.winH || 7, n = Math.max(1, Math.floor((o.w - 4) / (ww + 6)));
     const gap = (o.w - n * ww) / (n + 1);
-    for (let y = floorH + 4; y + wh < h - 2; y += floorH) {
+    for (let y = floorH + 4; y + wh < h - 1; y += floorH) {
       for (let i = 0; i < n; i++) windowOn(F, Math.round(gap + i * (ww + gap)), y, ww, wh, { frame: o.frame, shutter: o.shutter, box: o.box });
       if (o.floorLine) box(x0 - 1, y - 4, z1, x1 + 1, y - 3, z1 + 1, o.floorLine);
     }
-    // 側面一扇窗
-    if (h > 18) { const S = faceX(x1 - 1, z0, 1); windowOn(S, (o.d >> 1) - 2, h > 30 ? floorH + 4 : 6, 4, 6, { frame: o.frame, shutter: o.shutter }); }
-    // 屋頂
+    { const S = faceX(x1 - 1, z0, 1); windowOn(S, (o.d >> 1) - 2, 4, 4, 6, { frame: o.frame, shutter: o.shutter }); if (h > 28) windowOn(S, (o.d >> 1) - 2, floorH + 4, 4, 6, { frame: o.frame, shutter: o.shutter }); }
     if (o.roof === "gable") { gableRoof(x0, z0, x1, z1, h, o.roofC[0], o.roofC[1]); gableEnds(x0, x1, z0, z1, h, typeof o.wall === "function" ? wf(0, h, 0) : o.wall); }
     else flatRoof(x0, z0, x1, z1, h, o.roofC[1], o.roofC[0]);
     return { x0, z0, x1, z1, h, F, du, dw, top: o.roof === "gable" ? h + Math.ceil(o.d / 2) : h + 2 };
@@ -204,56 +202,52 @@
     // 地面：院子是草地，中間一條石板路通往門口
     const groundPaved = OPEN[type] && type !== "park" && type !== "river";
     box(-26, 0, -26, 26, 1, 26, (x, y, z) => groundPaved ? (((x >> 3) + (z >> 3)) % 2 ? pave[0] : pave[1]) : (((x >> 4) + (z >> 4)) % 3 ? grass[0] : grass[1]));
-    if (!OPEN[type]) box(-4, 0, 8, 4, 1, 26, (x, y, z) => (((x >> 1) + (z >> 1)) % 2 ? pave[0] : pave[1]));
+    if (!OPEN[type]) box(-3, 0, 12, 3, 1, 26, (x, y, z) => (((x >> 1) + (z >> 1)) % 2 ? pave[0] : pave[1]));
     const gas = oldtown;
     switch (type) {
       case "house": {
-        const b = building({ x0: -14, z0: -14, w: 28, d: 22, h: 19, wall: wallFn, roof: "gable", roofC: [roofC, roofD], shutter: R(1) < 0.5 ? roofD : null, box: true, door: { c: R(2) < 0.5 ? 0x5A3A28 : roofD } });
+        const b = building({ x0: -18, z0: -18, w: 36, d: 31, h: 17, wall: wallFn, roof: "gable", roofC: [roofC, roofD], shutter: R(1) < 0.5 ? roofD : null, box: true, door: { c: R(2) < 0.5 ? 0x5A3A28 : roofD, h: 9 } });
         top = b.top;
-        box(8, b.h, -6, 12, b.h + 12, -2, oldtown ? 0x8E8676 : 0x9A5A4A);                 // 煙囪
+        box(9, b.h, -12, 13, b.h + 14, -8, oldtown ? 0x8E8676 : 0x9A5A4A);                 // 煙囪
         fence(-25, 22, 22, true); fence(4, 22, 22, true);
-        flowerbed(-22, 12, -8, 17); bush(16, 14, 3, true); pot(5, 9); pot(-7, 9);
-        if (R(3) < 0.6) tree(-22, -20, 22, 6); else pine(18, -20, 24);
-        mailbox(14, 20);
+        flowerbed(-23, 15, -11, 19); bush(18, 17, 2.4, true); pot(5, 14); pot(-7, 14);
+        if (R(3) < 0.6) tree(-25, -25, 20, 4); else pine(21, -25, 22);
+        mailbox(14, 19);
         break;
       }
       case "attic": {
-        const b = building({ x0: -11, z0: -12, w: 22, d: 20, h: 18, wall: wallFn, roof: "gable", roofC: [roofC, roofD], box: true, door: { c: 0xC8A040 } });
+        const b = building({ x0: -16, z0: -16, w: 32, d: 28, h: 15, wall: wallFn, roof: "gable", roofC: [roofC, roofD], box: true, door: { c: 0xC8A040, h: 9 } });
         top = b.top;
-        // 閣樓窗
-        const S = faceX(b.x0, b.z0, -1); windowOn(S, 8, b.h + 2, 4, 4, {});
+        const S = faceX(b.x0, b.z0, -1); windowOn(S, 11, b.h + 2, 4, 4, {});
         fence(-25, 22, 22, true); fence(4, 22, 22, true);
-        for (let x = -22; x < 24; x += 9) if (Math.abs(x) > 6) bush(x, 18, 2.4, true);
-        tree(18, -18, 26, 7); pine(-22, -18, 24);
+        for (const x of [-21, -12, 12, 21]) bush(x, 18, 2.2, true);
+        tree(21, -24, 22, 4); pine(-23, -24, 20);
         break;
       }
       case "shop": {
         const gab = !!info.gable;
-        const b = building({ x0: -16, z0: -14, w: 32, d: 24, h: 26, wall: info.timber ? timberWall(wallC, 0x6A4630, -16, 16, 26) : wallFn, roof: gab ? "gable" : "flat", roofC: gab ? [roofC, roofD] : [0xF2ECE0, mixC(wallC, 0x000000, 0.12)], lit: true, door: { c: 0x3A2A22 }, floorH: 13, winW: 5, winH: 6, box: true, floorLine: gab ? null : 0xF2ECE0 });
+        const b = building({ x0: -23, z0: -20, w: 46, d: 36, h: 30, wall: info.timber ? timberWall(wallC, 0x6A4630, -23, 23, 30) : wallFn, roof: gab ? "gable" : "flat", roofC: gab ? [roofC, roofD] : [0xF2ECE0, mixC(wallC, 0x000000, 0.12)], lit: true, door: { c: 0x3A2A22, w: 6 }, winW: 6, winH: 7, box: true, floorLine: gab ? null : 0xF2ECE0 });
         top = b.top;
-        awning(-15, 15, 10, 16, roofC, 0xF4EEE2, 6);
-        pot(-14, 12); pot(12, 12); bench(-22, 16, true);
-        if (R(4) < 0.5) crates(14, -22); else bikes(16, 14);
-        flowerbed(18, -22, 25, -14);
-        tree(-24, -22, 22, 5);
+        awning(-22, 22, 16, 14, roofC, 0xF4EEE2, 4);
+        pot(-22, 18); pot(20, 18); bench(-25, 21, true);
+        if (R(4) < 0.5) crates(16, -26); else bikes(17, 17);
         break;
       }
       case "tall": {
-        const b = building({ x0: -15, z0: -15, w: 30, d: 26, h: 44, wall: wallFn, roof: "flat", roofC: [0xE8E2D6, mixC(wallC, 0x000000, 0.15)], floorH: 12, winW: 4, winH: 6, box: R(5) < 0.5, frame: 0xF2ECE0 });
+        const b = building({ x0: -23, z0: -20, w: 46, d: 36, h: 48, wall: wallFn, roof: "flat", roofC: [0xE8E2D6, mixC(wallC, 0x000000, 0.15)], winW: 5, winH: 7, box: R(5) < 0.5, frame: 0xF2ECE0 });
         top = b.top;
-        // 陽台、冷氣、水塔
-        for (let y = 16; y < 40; y += 12) box(-12, y, 11, -4, y + 1, 14, 0xE8E2D6);
-        box(4, 46, -8, 10, 52, -2, 0x8A8E94); box(-10, 46, 2, -6, 49, 6, 0xE8E4DC);
-        bikes(-22, 14); tree(20, 16, 20, 5); hedge(-25, -25, -18, 25, 4);
+        for (let y = 18; y < 46; y += 15) box(-18, y, 16, -8, y + 1, 19, 0xE8E2D6);
+        box(6, 50, -12, 12, 56, -6, 0x8A8E94); box(-14, 50, 2, -10, 53, 6, 0xE8E4DC);
+        bikes(-25, 17); bush(22, 19, 2, true);
         break;
       }
       case "school": {
-        const b = building({ x0: -22, z0: -18, w: 44, d: 26, h: 32, wall: wallFn, roof: "gable", roofC: [roofC, roofD], floorH: 15, winW: 4, winH: 8, frame: 0xF2ECE0, door: { c: 0x3A2A22, w: 8 } });
+        const b = building({ x0: -26, z0: -22, w: 52, d: 41, h: 32, wall: wallFn, roof: "gable", roofC: [roofC, roofD], winW: 5, winH: 8, frame: 0xF2ECE0, door: { c: 0x3A2A22, w: 7, h: 11 } });
         top = b.top;
-        box(-6, 1, 8, 6, 2, 12, C.stone); box(-5, 2, 8, 5, 3, 10, C.stone);            // 台階
-        box(-4, 28, 8, 4, 32, 9, 0xF2ECE0); light(0, 30, 9); set(0, 30, 10, C.iron);    // 時鐘
-        box(20, 1, 18, 21, 30, 19, C.iron); box(21, 24, 18, 27, 29, 19, info.flag || 0xC8402A);   // 旗竿
-        tree(-24, 16, 22, 5); tree(-24, -22, 24, 6); bikes(10, 16); bench(-20, 20, true);
+        box(-5, 1, 19, 5, 2, 23, C.stone);                                                  // 台階
+        box(-4, 23, 19, 4, 28, 20, 0xF2ECE0); light(0, 25, 20); set(0, 25, 21, C.iron);    // 時鐘
+        box(24, 1, 22, 25, 30, 23, C.iron); box(18, 24, 22, 24, 29, 23, info.flag || 0xC8402A);   // 旗竿
+        bikes(8, 19); bench(-22, 21, true);
         break;
       }
       case "wizard": {
@@ -263,7 +257,7 @@
         for (let i = 0; i < 9; i++) { const r = 10 - i * 1.15; for (let x = -11; x < 11; x++) for (let z = -14; z < 8; z++) { const d = Math.hypot(x + 0.5, z + 3.5); if (d < r && d > r - 2.2) set(x, 46 + i * 2, z, 0x5A3E8A); if (d < r) set(x, 47 + i * 2, z, d > r - 2.2 ? 0x4A3278 : null); } }
         light(0, 66, -4); light(0, 67, -4);
         const F = faceZ(-8, 5, 1);
-        door(F, 6, 5, 14, 0x3A2A4A); windowOn(F, 7, 24, 3, 5, { frame: 0x8A7E70 }); windowOn(F, 7, 36, 3, 5, { frame: 0x8A7E70 });
+        door(F, 6, 5, 10, 0x3A2A4A); windowOn(F, 7, 24, 3, 5, { frame: 0x8A7E70 }); windowOn(F, 7, 36, 3, 5, { frame: 0x8A7E70 });
         top = 66; flowerbed(-20, 10, -10, 16); flowerbed(10, 10, 20, 16); pine(-22, -20, 26); tree(18, -18, 22, 5, [0x5A8A6A, 0x4A7A5A]);
         set(5, 30, 6, 0x6A4A30); set(5, 31, 6, 0xC8A880);    // 貓頭鷹棲木
         break;
@@ -273,10 +267,11 @@
         const cols = [wallC, info.wall2 || mixC(wallC, 0xFFFFFF, 0.25), info.wall3 || mixC(roofC, 0xFFFFFF, 0.45)];
         let x = -24; let i = 0; top = 0;
         while (x < 16) {
-          const w = 14 + Math.floor(R(10 + i) * 4), h = 20 + Math.floor(R(20 + i) * 14), c = cols[i % 3];
+          const w = 14 + Math.floor(R(10 + i) * 4), h = 28 + Math.floor(R(20 + i) * 12), c = cols[i % 3];
           const wf = oldtown ? stoneWall(c) : () => c;
           const b = building({ x0: x, z0: -16, w: Math.min(w, 24 - x), d: 22, h, wall: wf, roof: R(30 + i) < 0.5 ? "gable" : "flat", roofC: [roofC, roofD], lit: true, door: { w: 4, u: 2, c: roofD }, winW: 4, winH: 6, box: R(40 + i) < 0.5 });
-          awning(x + 1, b.x1 - 1, 6, 14, i % 2 ? roofC : 0x4A6FA5, 0xF4EEE2, 4);
+          // （店面一樓 15 格高，遮陽棚在門上方）
+          awning(x + 1, b.x1 - 1, 6, 13, i % 2 ? roofC : 0x4A6FA5, 0xF4EEE2, 4);
           top = Math.max(top, b.top); x = b.x1; i++;
         }
         for (let k = -20; k < 22; k += 14) pot(k, 12);
@@ -377,36 +372,36 @@
   function landmark(id, lamps) {
     switch (id) {
       case "史威特偵探社": {
-        for (let a = 0; a < 40; a++) { const t = a / 40 * Math.PI * 2; set(Math.round(10 + Math.cos(t) * 5), Math.round(40 + Math.sin(t) * 5), -4, C.gold); }
-        for (let i = 0; i < 6; i++) set(14 + i, 36 - i, -4, 0x6A4630);
-        box(10, 28, -4, 11, 35, -3, C.iron);
-        for (let x = -15; x < 16; x += 2) light(x, 13 - Math.round(Math.sin((x + 15) / 30 * Math.PI) * 2), 17);
+        for (let a = 0; a < 40; a++) { const t = a / 40 * Math.PI * 2; set(Math.round(10 + Math.cos(t) * 5), Math.round(44 + Math.sin(t) * 5), -4, C.gold); }
+        for (let i = 0; i < 6; i++) set(14 + i, 40 - i, -4, 0x6A4630);
+        box(10, 32, -4, 11, 39, -3, C.iron);
+        for (let x = -21; x < 22; x += 2) light(x, 13 - Math.round(Math.sin((x + 21) / 42 * Math.PI) * 2), 17);
         break;
       }
       case "Hale’s Oven": {
-        box(6, 26, -10, 11, 38, -5, (x, y) => brickWall(C.brick, C.brickD)(x, y));
-        for (const [tx, tz] of [[-20, 18], [14, 20]]) {
+        box(6, 30, -12, 11, 44, -7, (x, y) => brickWall(C.brick, C.brickD)(x, y));
+        for (const [tx, tz] of [[-18, 19], [16, 19]]) {
           box(tx, 1, tz, tx + 1, 6, tz + 1, C.iron); box(tx - 2, 6, tz - 2, tx + 3, 7, tz + 3, C.wood);
-          box(tx, 7, tz, tx + 1, 13, tz + 1, C.white);
-          blob(tx + 0.5, 13, tz + 0.5, 5, 1.2, 5, (a, b, c) => ((Math.atan2(c - tz, a - tx) * 3 / Math.PI + 6) | 0) % 2 ? 0xC8402A : 0xF4EEE2, 0);
+          box(tx, 7, tz, tx + 1, 11, tz + 1, C.white);
+          blob(tx + 0.5, 11.5, tz + 0.5, 5, 1.2, 5, (a, b, c) => ((Math.atan2(c - tz, a - tx) * 3 / Math.PI + 6) | 0) % 2 ? 0xC8402A : 0xF4EEE2, 0);
         }
-        blob(0, 19.5, 11.5, 4, 1.4, 1.2, () => 0xD8A050, 0);
+        blob(0, 13, 16.5, 4, 1.4, 1.2, () => 0xD8A050, 0);
         break;
       }
       case "諾文甜點店": {
         for (let a = -7; a <= 7; a++) for (let b = -7; b <= 7; b++) for (let c = -3; c <= 3; c++) {
           const r = Math.hypot(a, b), q = (r - 4.8) ** 2 + c * c;
-          if (q < 5) set(a, 37 + b, -2 + c, c > 0 && q < 4.5 ? (hash(a, b, c) < 0.15 ? pick([0xF4D35E, 0x4AC8E8, 0xFFFFFF], a, b, 0) : 0xF2A0BC) : 0xD8A060);
+          if (q < 5) set(a, 41 + b, -2 + c, c > 0 && q < 4.5 ? (hash(a, b, c) < 0.15 ? pick([0xF4D35E, 0x4AC8E8, 0xFFFFFF], a, b, 0) : 0xF2A0BC) : 0xD8A060);
         }
-        box(0, 28, -2, 1, 32, -1, C.white);
+        box(0, 32, -2, 1, 36, -1, C.white);
         break;
       }
-      case "星星家": for (let i = 0; i < 5; i++) light(-12 + i * 6, 34 + (i % 2) * 3, -2); break;
-      case "禮的家": light(-10, 8, 7); light(9, 8, 7); light(-9, 8, 7); light(10, 8, 7); break;
-      case "佐代的公寓": box(-16, 30, 6, -15, 34, 10, 0x6A1E2E); set(-17, 34, 8, 0xE8DCC8); set(-17, 35, 8, 0xE8DCC8); break;
-      case "神崎家": box(8, 30, -4, 9, 44, -3, 0x9A9A9A); box(5, 42, -4, 12, 43, -3, 0x9A9A9A); break;
-      case "瑞特的租屋": for (let a = 0; a < 20; a++) { const t = a / 20 * Math.PI * 2; set(15, Math.round(10 + Math.sin(t) * 3), Math.round(9 + Math.cos(t) * 3), a % 5 < 2 ? C.white : 0xD8402A); } break;
-      case "玫君的租屋": box(15, 10, 6, 16, 14, 10, 0x2A2A33); box(16, 11, 7, 18, 13, 9, 0xB8282A); break;
+      case "星星家": for (let i = 0; i < 5; i++) light(-14 + i * 7, 36 + (i % 2) * 3, -4); break;
+      case "禮的家": light(-10, 7, 12); light(-9, 7, 12); light(8, 7, 12); light(9, 7, 12); break;
+      case "佐代的公寓": box(-24, 30, 6, -23, 34, 10, 0x6A1E2E); set(-25, 34, 8, 0xE8DCC8); set(-25, 35, 8, 0xE8DCC8); break;
+      case "神崎家": box(8, 28, -4, 9, 42, -3, 0x9A9A9A); box(5, 40, -4, 12, 41, -3, 0x9A9A9A); break;
+      case "瑞特的租屋": for (let a = 0; a < 20; a++) { const t = a / 20 * Math.PI * 2; set(18, Math.round(10 + Math.sin(t) * 3), Math.round(2 + Math.cos(t) * 3), a % 5 < 2 ? C.white : 0xD8402A); } break;
+      case "玫君的租屋": box(18, 10, 0, 19, 14, 4, 0x2A2A33); box(19, 11, 1, 21, 13, 3, 0xB8282A); break;
       case "梅魯塔的塔屋": set(5, 32, 6, 0x8A6A4A); set(5, 33, 6, 0xC8A880); set(6, 33, 6, 0xF4C840); break;
     }
   }
@@ -418,7 +413,7 @@
     for (const [k, c] of map) {
       const z = (k % 1024) - 256, y = Math.floor(k / 1024) % 512, x = Math.floor(k / 1024 / 512) - 256, p = [x, y, z];
       for (let a = 0; a < 3; a++) for (const sg of [1, -1]) {
-        if (a === 1 && sg < 0) continue;
+        if (a === 1 && sg < 0 && y <= 2) continue;   // 第一人稱會從下面看：只有貼地的底面不畫
         const n = p.slice(); n[a] += sg;
         if (solid(n[0], n[1], n[2])) continue;
         const u = (a + 1) % 3, v = (a + 2) % 3;
@@ -449,7 +444,13 @@
         for (let uu = u0; uu < u1; uu++) for (let vv = v0; vv < v1; vv++) done.add(uu * 4096 + vv);
         const c = Math.floor(kk / 256), aoc = kk % 256, ao = [aoc & 3, (aoc >> 2) & 3, (aoc >> 4) & 3, (aoc >> 6) & 3].map(i => AOV[i]);
         const corner = (uu, vv) => { const q = [0, 0, 0]; q[a] = plane * V; q[u] = (uu - 512) * V; q[v] = (vv - 512) * V; return q; };
-        const P = [corner(u0, v0), corner(u1, v0), corner(u1, v1), corner(u0, v1)];
+        const E = a === 1 && sg > 0 ? 0.02 : 0, P = [corner(u0 - E, v0 - E), corner(u1 + E, v0 - E), corner(u1 + E, v1 + E), corner(u0 - E, v1 + E)];   // 朝上的面往外多長一點點，蓋住 T 字接縫
+        if (a !== 1) {   // 側面的上緣稍微壓低（只限上面沒東西的地板、台子邊），不跟旁邊的地板搶畫
+          const vox = plane - 512 - (sg > 0 ? 1 : 0), yTop = (a === 0 ? u1 : v1) - 512, h0 = (a === 0 ? v0 : u0) - 512, h1 = (a === 0 ? v1 : u1) - 512;
+          let open = true;
+          for (let k = h0; k < h1 && open; k++) { const q = [0, 0, 0]; q[a] = vox; q[1] = yTop; q[a === 0 ? 2 : 0] = k; if (solid(q[0], q[1], q[2])) open = false; }
+          if (open) { const top = Math.max(P[0][1], P[1][1], P[2][1], P[3][1]) - 1e-6; for (const q of P) if (q[1] >= top) q[1] -= 0.02 * V; }
+        }
         let idx = (ao[0] + ao[2] > ao[1] + ao[3]) ? [0, 1, 2, 0, 2, 3] : [1, 2, 3, 1, 3, 0];
         if (sg < 0) idx = [idx[0], idx[2], idx[1], idx[3], idx[5], idx[4]];
         tmp.setHex(c); const nn = [0, 0, 0]; nn[a] = sg;
@@ -487,7 +488,7 @@
   // 一個街區四周的人行道（墊高、方磚、路緣）、路燈、行道樹
   function block(three, w, d, info) {
     T = three; reset();
-    const lamps = [], W = Math.round(w / V), D = Math.round(d / V), S = 6;
+    const lamps = [], W = Math.round(w / V), D = Math.round(d / V), S = 14;   // 人行道 14 格（1.75 單位）：靠路緣那條放路燈、行道樹、街道家具，靠房子那邊留給人走
     const gas = info.reg === "oldtown";
     for (let x = -S; x < W + S; x++) for (let z = -S; z < D + S; z++) {
       if (x >= 0 && x < W && z >= 0 && z < D) continue;
@@ -495,8 +496,16 @@
       const seam = (x + 200) % 8 === 0 || (z + 200) % 8 === 0;
       set(x, 0, z, edge ? C.curb : C.side); set(x, 1, z, edge ? C.curb : seam ? C.seam : C.side);
     }
+    const crystals = [];
     const onWalk = (x, z, i) => {
-      if (i % 2 === 0) lampPost(x, z, gas, lamps);
+      if (i % 2 === 0) {
+        // 高畫質：一半的路燈換成水晶燈（金屬底座＋托架，水晶本身由 town3d 另外畫，會發光、慢慢轉）
+        if (info.crystal && i % 4 === 0) {
+          box(x, 1, z, x + 1, 16, z + 1, C.iron); box(x - 1, 1, z - 1, x + 2, 3, z + 2, C.iron);
+          for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { set(x + dx, 16, z + dz, C.iron); set(x + dx * 2, 17, z + dz * 2, C.iron); set(x + dx * 2, 18, z + dz * 2, C.iron); }
+          crystals.push([x + 0.5, 21, z + 0.5]); lamps.push([x + 0.5, z + 0.5]);
+        } else lampPost(x, z, gas, lamps);
+      }
       else {
         box(x - 2, 2, z - 2, x + 3, 3, z + 3, (a, b, c) => (a === x - 2 || a === x + 2 || c === z - 2 || c === z + 2) ? C.curb : C.soil);
         box(x, 3, z, x + 1, 17, z + 1, C.trunk);
@@ -504,11 +513,35 @@
       }
     };
     let i = 0;
-    for (let x = 10; x < W - 4; x += 20) { onWalk(x, -3, i++); onWalk(x + 10, D + 2, i++); }
-    for (let z = 12; z < D - 4; z += 22) { onWalk(-3, z, i++); onWalk(W + 2, z + 11, i++); }
+    // 兩側人行道上的東西要避開各排的門前小路（街區內 56、112、168 格）
+    const lane = z => [56, 112, 168].some(L => Math.abs(z - L) < 8);
+    for (let x = 10; x < W - 4; x += 20) { onWalk(x, -S + 4, i++); onWalk(x + 10, D + S - 5, i++); }
+    const alleyZ = z => info.alley && z > 70 && z < 100;   // 中庭巷口前面留空
+    for (let z = 12; z < D - 4; z += 22) { if (!lane(z) && !(info.alley === "w" && alleyZ(z))) onWalk(-S + 4, z, i++); if (!lane(z + 11) && !(info.alley === "e" && alleyZ(z + 11))) onWalk(W + S - 5, z + 11, i++); }
+    /* 街道家具：路燈和行道樹之間，靠路緣那側隨機放長椅、腳踏車架、郵筒、垃圾桶、花箱、書報箱、魔導資訊柱 */
+    const furn = (x, z, ax, k) => {
+      const r = hash(x, k, info.seed | 0), kind = Math.floor(hash(k, x + z, 77) * 8);
+      if (r > 0.6) return;
+      const X = (a, b) => ax ? x + a : x + b, Z = (a, b) => ax ? z + b : z + a;   // a：沿著街、b：往路緣
+      if (kind === 0) bench(ax ? x - 4 : x, ax ? z : z - 4, ax);
+      else if (kind === 1) { for (let q = 0; q < 3; q++) { box(X(q * 3, 0), 2, Z(q * 3, 0), X(q * 3, 0) + 1, 5, Z(q * 3, 0) + 1, C.iron); set(X(q * 3, 1), 4, Z(q * 3, 1), [0x3A6E9A, 0xC8402A, 0xE8B83A][q]); set(X(q * 3, 2), 3, Z(q * 3, 2), 0x1E1E22); } }
+      else if (kind === 2) mailbox(x, z);
+      else if (kind === 3) { box(x, 2, z, x + 2, 6, z + 2, 0x5A7E6A); box(x, 6, z, x + 2, 7, z + 2, 0x4A6A5A); }
+      else if (kind === 4) { const x1 = ax ? x + 7 : x + 3, z1 = ax ? z + 3 : z + 7; box(x, 2, z, x1, 4, z1, (a, b, c) => b === 3 && a > x && a < x1 - 1 && c > z && c < z1 - 1 ? (hash(a, 5, c) < 0.4 ? pick(FLW, a, 1, c) : 0x5A8634) : C.wood); }
+      else if (kind === 5) { box(x, 2, z, x + 2, 7, z + 2, [0x3A6ABA, 0xE8B83A, 0x5A9A6A][Math.floor(hash(x, z, 9) * 3)]); set(x, 6, z, 0xF4F0E4); }
+      else if (kind === 6 && info.crystal) { box(x, 2, z, x + 2, 4, z + 2, C.iron); box(x, 4, z, x + 2, 11, z + 2, 0x4A4E5A); light(x, 9, z); light(x + 1, 8, z + 1); box(x, 11, z, x + 2, 12, z + 2, C.gold); }
+      else { for (let q = 0; q < 3; q++) box(X(q * 3, 0), 2, Z(q * 3, 0), X(q * 3, 0) + 1, 5, Z(q * 3, 0) + 1, 0x8A8E96); }
+    };
+    for (let x = 20; x < W - 6; x += 20) { furn(x, -S + 1, true, 1); furn(x + 10, D + S - 4, true, 2); }
+    for (let z = 23; z < D - 6; z += 22) {
+      if (!lane(z) && !(info.alley === "w" && alleyZ(z))) furn(-S + 1, z, false, 3);
+      if (!lane(z + 11) && !(info.alley === "e" && alleyZ(z + 11))) furn(W + S - 4, z + 11, false, 4);
+    }
+    // 四個角：路口的短石柱
+    for (const [cx, cz] of [[-S + 2, -S + 2], [W + S - 4, -S + 2], [-S + 2, D + S - 4], [W + S - 4, D + S - 4]]) for (const [dx, dz] of [[0, 0], [3, 0], [0, 3]]) box(cx + (cx < 0 ? dx : -dx), 2, cz + (cz < 0 ? dz : -dz), cx + (cx < 0 ? dx : -dx) + 1, 5, cz + (cz < 0 ? dz : -dz) + 1, C.stoneD);
     // 消防栓、垃圾桶
-    for (let k = 0; k < 4; k++) { const x = 4 + Math.floor(hash(k, info.seed, 1) * (W - 8)); box(x, 2, D + 3, x + 2, 6, D + 5, k % 2 ? 0xD8402A : 0x5A7E6A); }
-    return { meshes: meshes(info), lamps: lamps.map(([x, z]) => [x * V, z * V]) };
+    for (let k = 0; k < 4; k++) { const x = 4 + Math.floor(hash(k, info.seed, 1) * (W - 8)); box(x, 2, D + S - 4, x + 2, 6, D + S - 2, k % 2 ? 0xD8402A : 0x5A7E6A); }
+    return { meshes: meshes(info), lamps: lamps.map(([x, z]) => [x * V, z * V]), crystals: crystals.map(([x, y, z]) => [x * V, y * V, z * V]) };
   }
   // 沒有地點的空格：小花園或背景小屋，讓街區不會空一塊
   function filler(three, info) {
@@ -516,17 +549,105 @@
     const lamps = [], grass = GRASS[info.reg] || GRASS.central, pave = PAVE[info.reg] || PAVE.central, k = info.seed;
     box(-26, 0, -26, 26, 1, 26, (x, y, z) => (((x >> 4) + (z >> 4)) % 3 ? grass[0] : grass[1]));
     if (info.kind === "cottage") {
-      const b = building({ x0: -12, z0: -16, w: 24, d: 18, h: 17, wall: info.wall, roof: "gable", roofC: [info.roof, mixC(info.roof, 0, 0.18)], box: true });
-      box(-3, 0, 2, 3, 1, 26, (x, y, z) => (((x >> 1) + (z >> 1)) % 2 ? pave[0] : pave[1]));
-      fence(-25, 22, 22, true); fence(4, 22, 22, true); flowerbed(-22, 8, -10, 13); bush(16, 12, 3, true);
+      const b = building({ x0: -14, z0: -18, w: 28, d: 22, h: 15, wall: info.wall, roof: "gable", roofC: [info.roof, mixC(info.roof, 0, 0.18)], box: true, door: { h: 9 } });
+      box(-3, 0, 4, 3, 1, 26, (x, y, z) => (((x >> 1) + (z >> 1)) % 2 ? pave[0] : pave[1]));
+      fence(-25, 22, 22, true); fence(4, 22, 22, true); flowerbed(-22, 9, -12, 14); bush(19, 12, 2.4, true);
       tree(18, -22, 24, 6); pine(-22, -22, 22);
     } else {
       box(-3, 0, -26, 3, 1, 26, (x, y, z) => (((x >> 1) + (z >> 1)) % 2 ? pave[0] : pave[1]));
       tree(-20, -18, 24, 7); tree(12, 8, 22, 6, [0x76A03A, 0x8CB040, 0x648F34]); pine(14, -20, 24); pine(-18, 14, 22);
-      flowerbed(-14, -4, -6, 4); flowerbed(8, -12, 18, -6); bench(6, 14, true); hedge(-25, 22, -6, 25, 4); hedge(6, 22, 25, 25, 4);
+      flowerbed(-14, -4, -6, 4); flowerbed(8, -12, 18, -6); bench(6, 14, true); hedge(-25, 20, -6, 23, 4); hedge(6, 20, 25, 23, 4);
       bush(-10, 18, 2.6, true); lampPost(4, -6, info.reg === "oldtown", lamps);
     }
     return { meshes: meshes(info), lamps: lamps.map(([x, z]) => [x * V, z * V]) };
   }
-  N.voxTown = { lot, block, filler, V };
+  /* 城邊沒蓋房子的格子：公園、廣場、社區菜園（info.kind），四周的人行道另外由 block() 蓋 */
+  function park(three, w, d, info) {
+    T = three; reset();
+    const W = Math.round(w / V), D = Math.round(d / V), lamps = [], k = Math.abs(info.seed | 0) % 100000;
+    const grass = GRASS[info.reg] || GRASS.central, pave = PAVE[info.reg] || PAVE.central, gas = info.reg === "oldtown";
+    const R = n => hash(k, n, 41);
+    const paveC = (x, z) => (((x >> 2) + (z >> 2)) % 2 ? pave[0] : pave[1]);
+    if (info.kind === "plaza") {
+      box(0, 0, 0, W, 1, D, (x, y, z) => { const r = Math.hypot(x - W / 2, z - D / 2); return Math.abs(r - 30) < 1.5 ? C.stoneD : paveC(x, z); });
+      // 中間：魔導水晶方尖碑＋一圈水池
+      const cx = W >> 1, cz = D >> 1;
+      for (let x = cx - 14; x <= cx + 14; x++) for (let z = cz - 14; z <= cz + 14; z++) { const r = Math.hypot(x - cx, z - cz); if (r < 14 && r >= 12) box(x, 1, z, x + 1, 3, z + 1, C.stone); else if (r < 12) set(x, 1, z, (x + z) % 5 ? C.water : C.waterD); }
+      box(cx - 3, 1, cz - 3, cx + 3, 6, cz + 3, C.stoneD); box(cx - 2, 6, cz - 2, cx + 2, 26, cz + 2, (x, y) => y % 6 === 0 ? C.gold : C.stone);
+      for (let y = 26; y < 31; y++) for (let x = cx - 1; x <= cx; x++) for (let z = cz - 1; z <= cz; z++) light(x, y, z);
+      lamps.push([cx, cz]);
+      // 四角的樹（方形樹穴）、長椅、路燈
+      for (const [x, z] of [[18, 22], [W - 22, 22], [18, D - 26], [W - 22, D - 26], [18, D >> 1], [W - 22, D >> 1]]) { box(x - 3, 1, z - 3, x + 5, 2, z + 5, C.stoneD); box(x - 2, 1, z - 2, x + 4, 2, z + 4, C.soil); tree(x, z, 24 + (x % 3) * 2, 6); }
+      for (const [x, z, ax] of [[cx - 4, cz - 26, true], [cx - 4, cz + 25, true], [cx - 26, cz - 4, false], [cx + 25, cz - 4, false]]) bench(x, z, ax);
+      for (const [x, z] of [[cx - 20, cz - 20], [cx + 20, cz + 20], [cx - 20, cz + 20], [cx + 20, cz - 20]]) lampPost(x, z, gas, lamps);
+      flowerbed(6, 6, 30, 12); flowerbed(W - 30, D - 12, W - 6, D - 6);
+    } else if (info.kind === "garden") {
+      // 社區菜園：一畦一畦的作物、工具小屋、稻草人、水塔
+      box(0, 0, 0, W, 1, D, (x, y, z) => grass[((x >> 4) + (z >> 4)) % 2]);
+      const CROP = [[0x5A8634, 0xE8403A], [0x6A9A3C, 0xF4A040], [0x4E7A2E, 0x9A4AA8], [0x7AAA50, 0xF4D35E], [0x5E8A3A, 0x5E8A3A]];
+      for (let r = 0; r < 5; r++) for (let q = 0; q < 2; q++) {
+        const x0 = 8 + q * 54, z0 = 10 + r * 30, cr = CROP[(r + q + (k & 3)) % CROP.length];
+        box(x0 - 1, 1, z0 - 1, x0 + 47, 2, z0 + 21, (x, y, z) => x === x0 - 1 || x === x0 + 46 || z === z0 - 1 || z === z0 + 20 ? C.woodD : C.soil);
+        for (let z = z0 + 1; z < z0 + 19; z += 3) for (let x = x0 + 1; x < x0 + 45; x++) { set(x, 2, z, cr[0]); if (hash(x, z, k) < 0.25) set(x, 3, z, cr[1]); }
+      }
+      box(W - 26, 0, D - 26, W - 4, 1, D - 4, C.stoneD);
+      shell(W - 24, 1, D - 24, W - 8, 14, D - 8, (x, y) => y % 3 === 0 ? C.woodD : C.wood);
+      for (let x = W - 26; x < W - 6; x++) for (let z = D - 26; z < D - 6; z++) set(x, 14 + Math.min(Math.abs(z - (D - 16)), 9) * -0 + 0, z, x % 2 ? 0x8A4E3A : 0x7A4434);
+      // 稻草人
+      box(56, 1, 70, 57, 16, 71, C.wood); box(51, 11, 70, 62, 12, 71, C.wood); box(55, 15, 69, 58, 19, 72, 0xE8C878); box(54, 19, 69, 59, 20, 72, 0x8A4E3A);
+      // 水塔
+      box(6, 1, D - 20, 7, 18, D - 19, C.wood); box(16, 1, D - 20, 17, 18, D - 19, C.wood); box(6, 1, D - 10, 7, 18, D - 9, C.wood); box(16, 1, D - 10, 17, 18, D - 9, C.wood);
+      box(5, 18, D - 21, 18, 28, D - 8, (x, y) => y % 3 ? 0x7A9AAA : 0x5A7A8A);
+      fence(0, 0, W, true); fence(0, D - 1, W - 30, true); lampPost(W >> 1, D - 4, gas, lamps);
+    } else {
+      // 公園：草地、彎曲的小路、池塘（小木橋）、樹、長椅、花圃
+      box(0, 0, 0, W, 1, D, (x, y, z) => grass[((x >> 3) + (z >> 3) + (hash(x >> 3, 1, z >> 3) < 0.3 ? 1 : 0)) % 2]);
+      const path = z => (W >> 1) + Math.round(Math.sin(z / 23 + k) * 22);
+      for (let z = 0; z < D; z++) { const c = path(z); for (let x = c - 4; x <= c + 4; x++) set(x, 0, z, paveC(x, z)); }
+      for (let x = 0; x < W; x++) { const z0 = (D >> 1) + Math.round(Math.sin(x / 17 + k * 2) * 8); for (let z = z0 - 3; z <= z0 + 3; z++) set(x, 0, z, paveC(x, z)); }
+      const pz = R(1) < 0.5 ? 38 : D - 40, px = path(pz) < W / 2 ? W - 32 : 30;
+      for (let x = px - 22; x <= px + 22; x++) for (let z = pz - 18; z <= pz + 18; z++) {
+        const e = ((x - px) / 20) ** 2 + ((z - pz) / 15) ** 2 + hash(x >> 2, 3, z >> 2) * 0.15;
+        if (e < 1) set(x, 0, z, e > 0.8 ? C.stoneD : (x + z) % 7 ? C.water : C.waterD);
+        if (e < 0.25 && hash(x, 5, z) < 0.04) { set(x, 1, z, 0x5A9A5A); }
+      }
+      for (let x = px - 4; x < px + 4; x++) for (let z = pz - 17; z <= pz + 17; z++) { const a = Math.round(2 - 2 * ((z - pz) / 17) ** 2); set(x, 1 + a, z, (z % 2) ? C.wood : C.woodD); if (x === px - 4 || x === px + 3) set(x, 2 + a, z, C.woodD); }
+      const spots = [[14, 14], [W - 18, 20], [20, D - 22], [W - 20, D - 18], [16, D >> 1], [W - 14, (D >> 1) + 20], [30, 60], [W - 34, D - 70], [24, 110], [W - 26, 100]];
+      spots.forEach(([x, z], n) => { if (Math.abs(x - path(z)) < 10 || (Math.abs(x - px) < 26 && Math.abs(z - pz) < 22)) return; if (n % 4 === 3) pine(x, z, 22 + n % 3 * 2); else tree(x, z, 22 + (n % 3) * 3, 5 + (n % 2), n % 2 ? [0x76A03A, 0x8CB040, 0x648F34] : null); });
+      for (const z of [26, 80, 134]) { const c = path(z); bench(c + 6, z, false); }
+      for (const z of [50, 120]) lampPost(path(z) - 6, z, gas, lamps);
+      flowerbed(4, 66, 22, 76); flowerbed(W - 22, 140, W - 4, 150); bush(W - 8, 58, 2.6, true); bush(8, 150, 2.4, true);
+    }
+    return { meshes: meshes(info), lamps: lamps.map(([x, z]) => [x * V, z * V]) };
+  }
+  /* 港邊的格子：倉庫、貨櫃、木箱、漁網架（靠海那邊是街，再過去才是碼頭步道） */
+  function harbor(three, w, d, info) {
+    T = three; reset();
+    const W = Math.round(w / V), D = Math.round(d / V), lamps = [], k = Math.abs(info.seed | 0) % 100000;
+    box(0, 0, 0, W, 1, D, (x, y, z) => (((x >> 3) + (z >> 3)) % 2 ? 0xA8A090 : 0x9C9484));
+    // 倉庫：紅磚、拱形大門朝街（西邊）、山牆屋頂
+    const WALL = [[0xB4583E, 0x9A4834], [0x8A9A8A, 0x7A8A7A], [0xC8B898, 0xB8A888]];
+    const ware = (z0, len, ci) => {
+      const x0 = 8, x1 = W - 26, h = 34, wc = WALL[ci % WALL.length];
+      shell(x0, 1, z0, x1, h, z0 + len, (x, y, z) => y % 5 === 0 ? wc[1] : ((x + z) >> 1) % 7 ? wc[0] : wc[1]);
+      for (let z = z0; z < z0 + len; z++) for (let i = 0; i <= (x1 - x0) / 2 + 1; i++) { const y = h + Math.min(i, (x1 - x0) / 2 + 1 - i) * 0.7; set(x0 - 1 + i, Math.round(y), z, z % 4 ? 0x5A6068 : 0x4A5058); set(x1 - i, Math.round(y), z, z % 4 ? 0x5A6068 : 0x4A5058); }
+      for (let z = z0; z < z0 + len; z++) for (let y = h; y < h + (x1 - x0) * 0.35; y++) { const half = (y - h) / 0.7; if (x0 + half < x1 - half) { set(Math.round(x0 + half), y, z0, wc[0]); set(Math.round(x0 + half), y, z0 + len - 1, wc[0]); } }
+      // 大門（朝 -x：街）＋門上的號碼燈
+      const dz = z0 + (len >> 1) - 7;
+      for (let z = dz; z < dz + 14; z++) for (let y = 1; y < 22; y++) { const arch = y > 18 && Math.abs(z - dz - 6.5) > 7 - (22 - y) * 1.6; if (!arch) set(x0, y, z, (z - dz) % 3 === 0 ? 0x4A3020 : 0x6A4A30); }
+      for (let z = dz - 1; z <= dz + 14; z++) set(x0 - 1, 22, z, C.white);
+      set(x0 - 1, 25, dz + 6, 0xF4E8C0); light(x0 - 1, 26, dz + 6); light(x0 - 1, 26, dz + 7); lamps.push([x0 - 2, dz + 7]);
+      for (let z = z0 + 4; z < z0 + len - 4; z += 9) if (Math.abs(z - dz - 7) > 10) for (let y = 24; y < 30; y++) for (let q = 0; q < 4; q++) glass(x0, y, z + q);
+    };
+    ware(6, 70, k); ware(D - 80, 74, k + 1);
+    // 中間：貨櫃堆、木箱、漁網架
+    const CON = [0xC8402A, 0x3A6ABA, 0x4A8A5A, 0xE8A040, 0x8A8E96];
+    const con = (x, y, z, c) => box(x, y, z, x + 30, y + 13, z + 12, (a, b, q) => (a - x) % 3 === 0 ? mixC(c, 0x000000, 0.18) : c);
+    con(14, 1, 82, CON[k % 5]); con(14, 14, 82, CON[(k + 2) % 5]); con(48, 1, 84, CON[(k + 3) % 5]);
+    crates(20, 72); crates(70, 76);
+    for (let i = 0; i < 2; i++) { const x = 52 + i * 18; box(x, 1, 74, x + 1, 14, 75, C.wood); box(x + 12, 1, 74, x + 13, 14, 75, C.wood); for (let a = x; a <= x + 12; a++) for (let y = 7; y < 14; y++) if ((a + y) % 2) set(a, y, 74, 0x8A9A7A); }
+    lampPost(W - 14, 30, true, lamps); lampPost(W - 14, D - 30, true, lamps);
+    return { meshes: meshes(info), lamps: lamps.map(([x, z]) => [x * V, z * V]) };
+  }
+  N.voxTown = { lot, block, filler, park, harbor, V };
 })();

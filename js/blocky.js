@@ -72,7 +72,10 @@
     const ph = st.phase, [la, ra] = st.arms, [ll, rl] = st.legs;
     let ax = 0, bodyY = 0, nod = 0;
     if (st.pose === "stand" && o.walking) {
-      const w = Math.sin(tt * 9 + ph); ll.rotation.x = w * 0.55; rl.rotation.x = -w * 0.55; ax = w * 0.6; bodyY = Math.abs(Math.cos(tt * 9 + ph)) * 0.025;
+      // 步伐跟速度走：慢慢走小步、跑步大步又快
+      const sp = o.speed || 1, fq = 5.5 + sp * 3.2, amp = Math.min(0.85, 0.4 + sp * 0.18);
+      st.wph = (st.wph || 0) + dt * fq;
+      const w = Math.sin(st.wph + ph); ll.rotation.x = w * amp; rl.rotation.x = -w * amp; ax = w * amp * 1.1; bodyY = Math.abs(Math.cos(st.wph + ph)) * (0.015 + sp * 0.012);
     } else if (st.pose === "stand") { ll.rotation.x = rl.rotation.x = 0; bodyY = o.asleep ? 0 : Math.sin(tt * 1.6 + ph) * 0.006; }
     else if (st.pose === "sit") ax = -0.5;
     if (o.talking) { st.talkT += dt; nod = Math.sin(st.talkT * 7) * 0.08; } else st.talkT = 0;

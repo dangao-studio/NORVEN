@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.2.0";
+  const VERSION = "3.20.2";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -123,7 +123,7 @@
 
   /* ═════════ 位置 ═════════ */
   const OVERRIDE_MAX = 2 * 3600 * 1000; // 相遇固定地點最多 2 小時（避免角色整晚卡在原地）
-  function currentWhere(clock) {
+  function currentWhere(clock, peek) {   // peek：只是偷看未來，不要清掉到期的指派
     const enc = slot().encounter;
     const ov = enc && !enc.done && (Date.now() - enc.startedAt < OVERRIDE_MAX) ? { cast: enc.cast, loc: enc.loc } : null;
     const s = slot();
@@ -131,7 +131,7 @@
     for (const k in s.assign) {
       const a = s.assign[k];
       if (a.untilAbs == null) a.untilAbs = clock.abs + Math.max(0, Math.round(((a.until || 0) - Date.now()) / 60000));  // 舊版資料轉換
-      if (a.untilAbs <= clock.abs) { delete s.assign[k]; continue; }
+      if (a.untilAbs <= clock.abs) { if (!peek) delete s.assign[k]; continue; }
       active[k] = { loc: a.loc, act: a.act, until: Date.now() + (a.untilAbs - clock.abs) * 60000 };
     }
     return E.whereabouts(clock, ov, Object.assign({}, autoNeeds(clock), autoOutings(clock), autoVisits(clock), N.life ? N.life.plansAt(clock) : {}, active));
@@ -393,7 +393,9 @@
 
   /* ═════════ 小鎮 ═════════ */
   let townSig = "";
-  const use3d = () => store.ui.town3d !== false && N.town3d && N.town3d.supported() && !fail3d;
+  // 手機（觸控、小螢幕）不顯示 3D 小鎮，只用街區圖；房間的 3D 畫面照常
+  const isPhone = () => !(window.matchMedia && matchMedia("(pointer:fine)").matches && Math.max(screen.width, screen.height) >= 1000);
+  const use3d = () => !isPhone() && store.ui.town3d !== false && N.town3d && N.town3d.supported() && !fail3d;
   let fail3d = false, card3d = null;
   function townTopHTML(c) {
     const tf = todayFests(c);
@@ -401,15 +403,22 @@
         ${tf.length ? `<div class="fest-banner">${tf.map(f => `${f.icon} 今天是〈${esc(f.name)}〉`).join("　")}${N.life ? `<small class="fest-focus">${N.life.focusHTML(c)}</small>` : ""}</div>` : `<div class="fest-banner plain">${N.life ? N.life.focusHTML(c) : "今天沒有節日"}</div>`}
         <button type="button" class="btn primary party-btn" id="partyBtn">🎉 發起聚會</button>
       </div>
-      <div class="seg view-switch" role="tablist" aria-label="小鎮顯示方式">
+      ${isPhone() ? "" : `<div class="seg view-switch" role="tablist" aria-label="小鎮顯示方式">
         <button type="button" data-view3d="1" class="${use3d() ? "on" : ""}">🧊 3D 小鎮</button>
         <button type="button" data-view3d="0" class="${use3d() ? "" : "on"}">🗺️ 街區圖</button>
-      </div>`;
+      </div>`}`;
   }
+  N._state3d = c => state3d(c || clockNow());   // 除錯用
   function state3d(c) {
     const where = currentWhere(c), s = slot();
     const tf = todayFests(c);
-    return { min: c.min, weather: c.weather, where, hints: hintSet(c, where), observing: s.observing, fests: tf, partyLoc: s.encounter && s.encounter.party ? s.encounter.loc : null };
+    // 接下來 12 分鐘內誰要換地方（給 3D 小鎮提早出門用），以及現在的時間流速
+    const rate = store.mode === "preview" ? (store.preview.paused ? 0 : (store.preview.speed || 1)) : 1, ahead = {};
+    for (let k = 1; k <= 12 && c.min + k < 1440; k++) {
+      const w2 = currentWhere(Object.assign({}, c, { min: c.min + k, abs: c.abs + k }), true);
+      for (const id in w2) if (!ahead[id] && where[id] && w2[id] && w2[id].loc !== where[id].loc) ahead[id] = { loc: w2[id].loc, in: k };
+    }
+    return { min: c.min, weather: c.weather, where, ahead, rate, hints: hintSet(c, where), observing: s.observing, fests: tf, partyLoc: s.encounter && s.encounter.party ? s.encounter.loc : null };
   }
   function renderTown3d(el, c) {
     const sp = store.preview, live = store.mode === "preview";
@@ -425,6 +434,8 @@
           <button type="button" id="t3dLabels" class="${store.ui.labels3d !== false ? "on" : ""}" aria-label="顯示地名">🏷️</button>
           <button type="button" id="t3dFollow" aria-label="鏡頭跟著居民">📍</button>
           <button type="button" id="t3dWatch" aria-label="放著看">📺</button>
+          <button type="button" data-rot3d="1" aria-label="向左轉" title="向左轉（Q；右鍵或 Shift＋拖曳也能轉）">⟲</button>
+          <button type="button" data-rot3d="-1" aria-label="向右轉" title="向右轉（E）">⟳</button>
         </div>
         <div class="t3d-regions">${N.regions.map(r => `<button type="button" data-fly="${r.id}">${r.name}</button>`).join("")}</div>
         <div class="t3d-card" id="t3dCard" hidden></div>
@@ -456,6 +467,7 @@
       <div class="card3d-act">
         <button type="button" class="btn primary" data-observe="${esc(id)}">${s.observing === id ? "回到觀察" : "👀 觀察"}</button>
         <button type="button" class="btn soft" data-follow3d="${esc(id)}">📍 跟著看</button>
+        ${w.avail && N.interiors && N.interiors[w.loc] ? `<button type="button" class="btn soft" data-ctlstart="${esc(id)}">🎮 操控</button>` : ""}
         <button type="button" class="btn soft" data-cardloc="${esc(w.loc)}">🏠 這個地點</button>
       </div>`;
     el.hidden = false;
@@ -552,7 +564,7 @@
   }
 
   function renderTown(el, c) {
-    if (use3d()) return renderTown3d(el, c);
+    if (use3d()) { if (ctl && ctl.mode === "town" && el.querySelector("#t3d")) return; if (ctl && ctl.mode === "town") { el.innerHTML = townTopHTML(c); return; } return renderTown3d(el, c); }   // 操控中，3D 小鎮在操控畫面裡，不要搶回來
     const where = currentWhere(c), occ = E.occupancy(where), hints = hintSet(c, where);
     const r = N.regions.find(x => x.id === store.ui.region) || N.regions[0];
     const page = Math.min(store.ui.page[r.id] || 0, r.pages.length - 1);
@@ -740,6 +752,7 @@
           <button type="button" class="btn soft" id="assignBtn" ${busy ? "disabled" : ""}>🧭 指派去…</button>
           <button type="button" class="btn soft" id="interactBtn" ${busy ? "disabled" : ""}>💬 找人互動</button>
           <button type="button" class="btn soft" id="phoneBtn">📱 偷看手機</button>
+          <button type="button" class="btn primary span2" id="ctlBtn" ${busy || !w.avail ? "disabled" : ""}>🎮 操控${esc(x.id)}</button>
           <button type="button" class="btn soft" id="relBtn">💗 關係</button>
           <button type="button" class="btn soft span2" id="profileBtn" aria-expanded="${profileOpen}">📇 ${profileOpen ? "收起資料" : "角色資料"}</button>
         </div>
@@ -1048,15 +1061,18 @@
   let roomHost = null;
   function updateRoom() {
     const sheetOpen = !$("#sheet").hidden;
-    const el = (sheetOpen && $("#sheet .room3d")) || (!sheetOpen && $("#view .room3d")) || null;
+    const el = (ctl && $("#ctl .ctl-stage[data-room]")) || (sheetOpen && $("#sheet .room3d")) || (!sheetOpen && $("#view .room3d")) || null;
     if (!el) return;
     const c0 = clockNow(), where = currentWhere(c0), s = slot();
     const talking = new Set(s.encounter && !s.encounter.done && !s.encounter.pending ? s.encounter.cast : []);
     const push = () => N.room3d.update({ where, min: c0.min, observing: s.observing, hints: hintSet(c0, where), talking });
     if (roomHost !== el || !el.querySelector(".room-canvas")) {
       roomHost = el;
+      const isCtl = !!(ctl && el.closest("#ctl"));
       N.room3d.mount(el, el.dataset.room, { onChar: id => { closeSheet(); startObserve(id); } }).then(() => {
-        const l = el.querySelector(".room-load"); if (l) l.remove(); push();
+        const l = el.querySelector(".room-load"); if (l) l.remove();
+        if (isCtl && ctl) { N.room3d.control(ctl.id, CTL_HOOKS); if (N.room3d.setBusy) N.room3d.setBusy(() => !!ctl && ["ctl-ring", "ctl-panel", "ctl-talk"].some(k => { const e = $("#ctl ." + k); return e && !e.hidden; })); if (ctl.fp && N.room3d.fp) N.room3d.fp(true); ctlFPUI(); }
+        push();
       }).catch(() => { fail3d = true; render(); });
       return;
     }
@@ -1090,6 +1106,324 @@
       if (!pos.length && !empty) pl.insertAdjacentHTML("beforeend", `<div class="plan-empty">目前沒有人</div>`);
       if (pos.length && empty) empty.remove();
     });
+  }
+
+
+  /* ═════════ 操控居民 ═════════
+   * 全螢幕的房間畫面：點地板走過去、點家具或別人跳出圓環選單、WASD／搖桿直接走、「出門」換地方。
+   * 操控中的人用「指派」讓整個小鎮知道他在哪裡、在做什麼；結束操控就回到原本的行程。 */
+  let ctl = null;
+  function ctlStart(id) {
+    if (!N.room3d || !use3dRoom()) return toast("這台裝置跑不了 3D 房間");
+    const c = clockNow(), w = currentWhere(c)[id];
+    if (!w.avail) return toast(`${id}正在休息，叫不起來`);
+    const s = slot();
+    if (s.observing !== id) { s.observing = id; s.encounter = null; s.status = null; }
+    s.assign[id] = { loc: w.loc, untilAbs: stayFor(180), act: w.act, ctl: true };
+    save(true);
+    ctl = { id, loc: w.loc, act: w.act };
+    const box = document.createElement("div"); box.id = "ctl"; box.className = "ctl";
+    box.innerHTML = `<div class="ctl-top"><div class="ctl-me">${person(id, 40)}<div><b>${esc(id)}</b><span class="ctl-act"></span></div></div>
+        <button type="button" data-ctl="shop" class="ctl-shopbtn" hidden title="店裡">🛍</button><button type="button" data-ctl="bag" title="背包">🎒</button><button type="button" data-ctl="fp" title="第一人稱（V）">👁</button><button type="button" data-ctl="out">🚪 出門</button><button type="button" data-ctl="end">結束</button></div>
+      <div class="ctl-stage room3d"></div>
+      <div class="ctl-hint">點地板走過去・點家具或別人會出現選單・${matchMedia("(pointer:fine)").matches ? "WASD／方向鍵直接走" : "左下搖桿直接走"}</div>
+      <div class="ctl-talk" hidden></div>
+      <div class="ctl-joy"><i></i></div>
+      <div class="ctl-ring" hidden></div>
+      <div class="ctl-panel" hidden></div>
+      <div class="ctl-fade" hidden></div>`;
+    document.body.appendChild(box); document.body.classList.add("ctl-on");
+    box.addEventListener("click", ctlClick);
+    ctlJoystick(box.querySelector(".ctl-joy"));
+    ctl.keys = new Set();
+    ctl.kd = e => {
+      if (/INPUT|TEXTAREA/.test(document.activeElement && document.activeElement.tagName) || document.body.classList.contains("room-editing")) return;
+      const k = e.key.toLowerCase();
+      if (k === "escape") { if (!$("#ctl .ctl-ring").hidden || !$("#ctl .ctl-panel").hidden) return ctlCloseMenus(); return; }
+      if (/^(w|a|s|d|arrowup|arrowdown|arrowleft|arrowright)$/.test(k)) { e.preventDefault(); ctl.keys.add(k); ctlKeys(); }
+      // 第一人稱：V 切換、E 互動（只在小鎮上）
+      if (k === "v" && CT().fp) { e.preventDefault(); ctl.fp = CT().fp(!ctl.fp); ctlFPUI(); }
+      if (k === "e" && ctl.fp && CT().interact) { e.preventDefault(); CT().interact(); }
+      if ((k === " " || k === "enter") && !$("#ctl .ctl-talk").hidden) { e.preventDefault(); ctlTalkNext(); }
+    };
+    ctl.ku = e => { ctl.keys.delete(e.key.toLowerCase()); ctlKeys(); };
+    window.addEventListener("keydown", ctl.kd); window.addEventListener("keyup", ctl.ku);
+    ctlEnter(w.loc);
+  }
+  function use3dRoom() { return !fail3d && N.room3d && N.room3d.supported(); }
+  function ctlKeys() {
+    const K = ctl.keys, x = (K.has("d") || K.has("arrowright") ? 1 : 0) - (K.has("a") || K.has("arrowleft") ? 1 : 0), z = (K.has("s") || K.has("arrowdown") ? 1 : 0) - (K.has("w") || K.has("arrowup") ? 1 : 0);
+    const m = Math.hypot(x, z) || 1; CT().ctlMove(x / m, z / m);
+  }
+  function ctlJoystick(el) {
+    const knob = el.querySelector("i"); let on = null;
+    const mv = e => {
+      if (!on) return;
+      const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width / 2;
+      let dx = e.clientX - cx, dy = e.clientY - cy; const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; }
+      knob.style.transform = `translate(${dx}px,${dy}px)`; CT().ctlMove(dx / R, dy / R);
+    };
+    el.addEventListener("pointerdown", e => { on = e.pointerId; el.setPointerCapture(e.pointerId); mv(e); e.stopPropagation(); });
+    el.addEventListener("pointermove", mv);
+    const up = () => { on = null; knob.style.transform = ""; CT().ctlMove(0, 0); };
+    el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+  }
+  // 進到某個地點的房間
+  // 操控中用哪一套：戶外在小鎮上（town3d.ctl），室內在房間（room3d）
+  const CT = () => ctl && ctl.mode === "town" ? N.town3d.ctl : N.room3d;
+  const canTown = () => !isPhone() && N.town3d && N.town3d.ctl && N.town3d.supported() && !fail3d;
+  const TOWN_HOOKS = {
+    onPerson: (b, x, y) => ctlPersonRing(b, x, y),
+    onSpot: (opts, x, y) => CTL_HOOKS.onSpot(opts, x, y),
+    onLoc: loc => { if (!ctl || loc === ctl.loc) return; ctl.loc = loc; const s = slot(); s.assign[ctl.id] = { loc, untilAbs: stayFor(180), act: "在附近走動", ctl: true }; save(true); ctlHud(); },
+    onDoor: loc => { if (!ctl) return; const s = slot(); s.assign[ctl.id] = { loc, untilAbs: stayFor(180), act: `走進${locName(loc)}`, ctl: true }; save(true); ctlFade(loc, () => ctlEnter(loc)); }
+  };
+  // 進出房子的載入畫面：淡入、角色頭像、地點名稱、轉圈；房間或小鎮準備好之後淡出
+  function ctlFade(loc, then) {
+    const f = $("#ctl .ctl-fade"); if (!f) return then();
+    const L = N.locations.find(l => l.id === loc), going = ctl.mode === "town" && !(N.interiors && N.interiors[loc] && N.interiors[loc].outdoor && !N.interiors[loc].dark);
+    f.innerHTML = `<div class="ctl-load">${person(ctl.id, 56)}<p class="ctl-load-to">${going ? "走進" : "前往"}</p><h3>${L && L.icon ? L.icon + " " : ""}${esc(locName(loc))}</h3><div class="ctl-load-spin"></div></div>`;
+    f.hidden = false; f.classList.remove("out");
+    setTimeout(() => { if (!ctl) return; then(); setTimeout(() => { f.classList.add("out"); setTimeout(() => { f.hidden = true; f.classList.remove("out"); }, 400); }, 650); }, 500);
+  }
+  // 第一人稱的準心和提示
+  function ctlFPUI() {
+    const st = $("#ctl .ctl-stage"); if (!st) return;
+    let x = st.querySelector(".fp-cross");
+    if (ctl.fp) {
+      if (!x) { x = document.createElement("div"); x.className = "fp-cross"; x.innerHTML = `<i></i><span></span>`; st.appendChild(x); }
+      const hint = $("#ctl .ctl-hint"); if (hint) hint.textContent = matchMedia("(pointer:fine)").matches ? `點畫面鎖定滑鼠・滑鼠轉頭・WASD 走・對準${ctl.mode !== "town" ? "人或家具" : "人、長椅或門"}按 E（或點擊）・Esc 放開滑鼠・V 回到俯視` : `拖曳轉頭・左下搖桿走・對準${ctl.mode !== "town" ? "人或家具" : "人或門"}點一下互動・V 回到俯視`;
+      clearInterval(ctl.aimT);
+      ctl.aimT = setInterval(() => {
+        if (!ctl || !ctl.fp) return clearInterval(ctl && ctl.aimT);
+        const a = CT().aim ? CT().aim() : null, sp = x.querySelector("span");
+        x.classList.toggle("hot", !!a);
+        sp.textContent = !a ? "" : a.kind === "person" ? `E　跟${a.id}互動` : a.kind === "spot" ? `E　${a.label}` : a.kind === "exit" ? "E　出門到街上" : `E　走進${locName(a.id)}`;
+      }, 200);
+    } else {
+      if (x) x.remove(); clearInterval(ctl.aimT);
+      const hint = $("#ctl .ctl-hint"); if (hint && ctl.mode === "town") hint.textContent = `點地面走過去・點長椅或別人會出現選單・點房子會走進去・WASD／方向鍵直接走・V 第一人稱`;
+      else if (hint) hint.textContent = `點地板走過去・點家具或別人會出現選單・${matchMedia("(pointer:fine)").matches ? "WASD／方向鍵直接走" : "左下搖桿直接走"}・V 第一人稱`;
+    }
+  }
+  // 戶外：直接在 3D 小鎮上走（opt.at：從哪個門口出來）
+  function ctlTown(loc, opt) {
+    const stage = $("#ctl .ctl-stage");
+    if (ctl.mode === "town" && stage.querySelector("canvas")) { ctl.loc = loc; ctlHud(); return; }   // 已經在小鎮上了
+    N.room3d.control(null); if (N.room3d.stop) N.room3d.stop();
+    roomHost = null;
+    stage.removeAttribute("data-room"); stage.classList.remove("room3d"); stage.classList.add("ctl-town"); stage.innerHTML = `<div class="empty">小鎮搭建中……</div>`;
+    ctl.mode = "town";
+    const hint = $("#ctl .ctl-hint"); if (hint) hint.textContent = `點地面走過去・點長椅或別人會出現選單・點房子會走進去・WASD／方向鍵直接走・V 第一人稱`;
+    N.town3d.mount(stage, {}).then(() => {
+      if (!ctl || ctl.mode !== "town") return;
+      const e = stage.querySelector(".empty"); if (e) e.remove();
+      N.town3d.update(state3d(clockNow()));
+      N.town3d.ctl.control(ctl.id, TOWN_HOOKS, { loc, at: opt && opt.at });
+      // 選單、對話框打開時：放開滑鼠、不要再鎖（才按得到按鈕）
+      if (N.town3d.ctl.setBusy) N.town3d.ctl.setBusy(() => !!ctl && ["ctl-ring", "ctl-panel", "ctl-talk"].some(k => { const e = $("#ctl ." + k); return e && !e.hidden; }));
+      if (ctl.fp) { N.town3d.ctl.fp(true); }   // 從房子出來：維持第一人稱
+      ctlFPUI();
+    }).catch(() => { fail3d = true; ctl.mode = "room"; ctlEnter(loc); });
+    ctlHud();
+  }
+  function ctlEnter(loc, opt) {
+    ctl.loc = loc;
+    const stage = $("#ctl .ctl-stage");
+    const out = N.interiors && N.interiors[loc] && N.interiors[loc].outdoor && !N.interiors[loc].dark;
+    if (canTown() && (out || (opt && opt.street))) return ctlTown(loc, opt);
+    if (ctl.mode === "town") { N.town3d.ctl.control(null); N.town3d.unmount(); ctl.mode = "room"; ctlFPUI(); }
+    stage.classList.remove("ctl-town"); stage.classList.add("room3d");
+    const hint = $("#ctl .ctl-hint"); if (hint) hint.textContent = `點地板走過去・點家具或別人會出現選單・${matchMedia("(pointer:fine)").matches ? "WASD／方向鍵直接走" : "左下搖桿直接走"}`;
+    if (!N.interiors || !N.interiors[loc]) { stage.innerHTML = `<div class="empty">這裡沒有可以走進去的室內。</div>`; ctlHud(); return; }
+    stage.dataset.room = loc; stage.innerHTML = "";
+    N.room3d.control(null);
+    roomHost = null;
+    updateRoom();
+    ctlHud();
+  }
+  const CTL_HOOKS = {
+    onPerson: (b, x, y) => ctlPersonRing(b, x, y),
+    // 第一人稱從大門走出去：回到街上（手機沒有 3D 小鎮：打開「要去哪裡」）
+    onExit: () => { if (!ctl) return; if (canTown()) { const at = N.town3d.ctl.doorPos(ctl.loc); ctlFade(ctl.loc, () => ctlEnter(ctl.loc, { street: true, at })); } else ctlOut(); },
+    onSpot: (opts, x, y) => ctlRing(x, y, "🪑", opts.map(o => ({ icon: o.icon, label: o.label, pick: () => { CT().ctlUseSpot(o); ctlSetAct(o.act); } }))
+      .concat([{ icon: "🚶", label: "走過去", pick: () => { const sp = o0(opts).spot; CT().ctlUseSpot({ spot: { x: sp.x, z: sp.z } }); ctlSetAct("在附近走動"); } }]))
+  };
+  const o0 = a => a[0];
+  function ctlHud() {
+    if (!ctl) return;
+    const w = currentWhere(clockNow())[ctl.id], el = $("#ctl .ctl-act");
+    if (el) el.textContent = `${locName(w.loc)}・${w.act}`;
+    const sb = $("#ctl .ctl-shopbtn"); if (sb) { const sh = shopAt(ctl.loc); sb.hidden = !sh; if (sh) sb.innerHTML = `${sh.icon}<span class="ctl-shopname"> ${esc(sh.title)}</span>`; }
+  }
+  function ctlSetAct(act) {
+    const s = slot(), a = s.assign[ctl.id]; if (!a) return;
+    a.act = act; a.untilAbs = stayFor(180); save(true); ctlHud();
+  }
+  function ctlCloseMenus() { const r = $("#ctl .ctl-ring"), p = $("#ctl .ctl-panel"); if (r) r.hidden = true; if (p) p.hidden = true; }
+  // 圓環選單：中間是對象，選項排成一圈
+  function ctlRing(x, y, center, opts) {
+    const el = $("#ctl .ctl-ring"); if (!el) return;
+    ctl.ringOpts = opts;
+    const n = opts.length, R = n > 8 ? 112 : n > 5 ? 92 : 78;
+    const W = window.innerWidth, H = window.innerHeight;
+    x = Math.max(R + 40, Math.min(W - R - 40, x)); y = Math.max(R + 70, Math.min(H - R - 50, y));
+    el.innerHTML = `<div class="ring-c" style="left:${x}px;top:${y}px">${center}</div>` + opts.map((o, i) => {
+      const a = -Math.PI / 2 + i * Math.PI * 2 / n, px = x + Math.cos(a) * R, py = y + Math.sin(a) * R;
+      return `<button type="button" class="ring-o${o.dis ? " dis" : ""}" data-ring="${i}" style="left:${px}px;top:${py}px" ${o.dis ? "disabled" : ""}><span>${o.icon}</span><small>${esc(o.label)}${o.why ? `<em>${esc(o.why)}</em>` : ""}</small></button>`;
+    }).join("");
+    el.hidden = false;
+  }
+  function ctlPersonRing(b, x, y) {
+    const a = ctl.id, c = clockNow(), where = currentWhere(c);
+    const s = slot();
+    if (s.encounter && !s.encounter.done && !s.encounter.pending) return ctlTalk();
+    const awake = where[b] && where[b].avail;
+    const pn = $("#ctl .ctl-panel"); if (pn) pn.hidden = true;
+    if (!awake) return ctlRing(x, y, person(b, 44), [{ icon: "💤", label: "在休息", dis: true, pick: () => {} }]);
+    ctlRing(x, y, person(b, 44), ringMenu(a, b, null, x, y));
+  }
+  // 圓環的分類：說話、一起、小動作、小遊戲、送禮、戀愛（點分類會換成那一類的選項）
+  function ringMenu(a, b, group, x, y) {
+    const sub = g => () => ctlRing(x, y, person(b, 44), ringMenu(a, b, g, x, y));
+    const back = { icon: "↩️", label: "返回", pick: sub(null) };
+    const act = id => () => ctlInteract(b, id);
+    const more = g => Object.keys(N.moreActs).filter(k => N.moreActs[k].group === g).map(k => { const A = N.moreActs[k], why = moreWhy(a, b, k); return { icon: A.icon, label: A.label, dis: !!why, why, pick: act(k) }; });
+    const r = getRel(a, b), [elig] = loveEligible(a, b), love = elig && r.route;
+    if (!group) {
+      const o = [N.actions.find(z => z.id === "chat")].filter(Boolean).map(ac => ({ icon: ac.icon, label: ac.label, pick: act(ac.id) }));
+      o.push({ icon: "🤝", label: "一起…", pick: sub("together") }, { icon: "✋", label: "小動作…", pick: sub("small") }, { icon: "🎲", label: "小遊戲…", pick: sub("game") },
+        { icon: "🎁", label: "送禮", pick: () => ctlBag(b) });
+      if (love) o.push({ icon: "💗", label: "戀愛…", pick: sub("love") });
+      return o;
+    }
+    if (group === "together") return more("together").concat(N.actions.filter(z => z.id === "help").map(ac => ({ icon: ac.icon, label: ac.label, pick: act(ac.id) })), [back]);
+    if (group === "small") return N.actions.filter(z => z.id === "food" || z.id === "tease").map(ac => ({ icon: ac.icon, label: ac.label, pick: act(ac.id) })).concat(more("small"), [back]);
+    if (group === "game") return more("game").concat([back]);
+    const o = [];
+    for (const ac of N.loveActions) {
+      let why = "";
+      if (ac.dating && r.status !== "交往中") why = "交往後";
+      else if (!ac.dating && ac.id === "confess" && r.status === "交往中") why = "已交往";
+      else if (!ac.dating && r.status !== "交往中" && r.pts < ac.need) why = `好感${ac.need}`;
+      o.push({ icon: ac.icon, label: ac.label, dis: !!why, why, pick: act(ac.id) });
+    }
+    const dw = dateWhy(a, b);
+    o.push({ icon: "📍", label: "約會去…", dis: !!dw, why: dw, pick: () => ctlDatePick(b) });
+    for (const k of Object.keys(N.loveMore)) { const why = moreWhy(a, b, k); if (why === null) continue; o.push({ icon: N.loveMore[k].icon, label: N.loveMore[k].label, dis: !!why, why, pick: act(k) }); }
+    const an = annivInfo(a, b); if (an) o.push({ icon: N.loveSpecial.anniv.icon, label: `${an.text}紀念`, pick: act("anniv") });
+    const fs = festDateOf(a, b); if (fs) o.push({ icon: fs.icon || N.loveSpecial.fest.icon, label: `一起過${fs.name}`, pick: act("festdate") });
+    return o.concat([back]);
+  }
+  function ctlInteract(b, action) {
+    CT().ctlApproach(b);
+    sheetState = { type: "interact", who: ctl.id, target: b };
+    doInteract(action);
+    ctlSetAct(`和${b}說話`);
+    ctlTalk();
+  }
+  // 對話框：一句一句看
+  function ctlTalk() {
+    const el = $("#ctl .ctl-talk"); if (!el) return;
+    const s = slot(), enc = s.encounter, ev = enc && encEvent(enc);
+    const sig = enc ? [enc.eid, enc.step, enc.pending, enc.done].join("|") : "";
+    if (sig === ctl.talkSig && !el.hidden === !!enc) return;   // 沒變就不要重畫（按鈕才按得到）
+    ctl.talkSig = sig;
+    if (!enc || !ev) { el.hidden = true; return; }
+    if (enc.pending) {
+      const others = enc.cast.filter(x => x !== ctl.id);
+      el.innerHTML = `<div class="ctl-line narr">${esc(others.length ? `${others.join("、")}好像有話要說。` : "好像有什麼事。")}〈${esc(ev.title)}〉</div>
+        <div class="ctl-btns"><button type="button" class="btn primary" data-ctl="encyes">👂 聽聽看</button><button type="button" class="btn soft" data-ctl="encno">先不要</button></div>`;
+      el.hidden = false; return;
+    }
+    if (enc.done) {
+      const res = enc.result ? `好感 ${enc.result.pts}${enc.result.status ? "・" + enc.result.status : ""}${enc.result.note ? "・" + enc.result.note : ""}` : enc.bond && enc.bond.length ? enc.bond.map(([x, y, d]) => `${x}和${y} +${d}`).join("、") : "";
+      el.innerHTML = `<div class="ctl-line narr">〈${esc(ev.title)}〉已記入日誌${res ? `<br><small>${esc(res)}</small>` : ""}</div><div class="ctl-btns"><button type="button" class="btn primary" data-ctl="talkok">好</button></div>`;
+      el.hidden = false; return;
+    }
+    const l = ev.lines[enc.step], last = enc.step >= ev.lines.length - 1;
+    el.innerHTML = (l[0] === "＊" ? `<div class="ctl-line narr">${esc(l[1])}</div>` : `<div class="ctl-line">${person(l[0], 36)}<div><b>${esc(l[0])}</b><p>${esc(l[1])}</p></div></div>`)
+      + `<div class="ctl-btns"><span class="muted">${enc.step + 1} / ${ev.lines.length}</span><button type="button" class="btn primary" data-ctl="talknext">${last ? "看完了" : "下一句"}</button></div>`;
+    el.hidden = false;
+  }
+  function ctlTalkNext() {
+    const s = slot(), enc = s.encounter; if (!enc) return ctlTalk();
+    if (enc.done) { const aa = enc.afterAct; continueObserve(); ctlSetAct(aa || "在附近走動"); ctlHud(); return ctlTalk(); }
+    nextLine(); ctlTalk();
+  }
+  // 出門：選要去哪裡
+  function ctlOut() {
+    const el = $("#ctl .ctl-panel"), cur = ctl.loc;
+    let list = "";
+    for (const r of N.regions) r.pages.forEach((pg, pi) => {
+      const ls = N.locations.filter(l => l.region === r.id && l.page === pi && (l.kind !== "home" || N.schedules[ctl.id].home === l.id || slot().rel && getRel(ctl.id, roomOwnerOf(l.id) || ctl.id).pts >= 55));
+      if (!ls.length) return;
+      list += `<h4>${esc(r.name + r.sub)}・${esc(pg)}</h4><div class="chip-row">${ls.map(l => `<button type="button" class="chip loc-chip ${cur === l.id ? "on" : ""}" data-ctlgo="${esc(l.id)}" ${cur === l.id ? "disabled" : ""}>${l.icon} ${esc(l.name)}</button>`).join("")}</div>`;
+    });
+    const street = ctl.mode !== "town" && canTown() ? `<div class="chip-row" style="margin-bottom:10px"><button type="button" class="btn primary" data-ctl="street">🚶 走到街上</button></div>` : "";
+    el.innerHTML = `<div class="ctl-panel-in"><h3>${person(ctl.id, 28)}${esc(ctl.id)}要去哪裡？</h3>${street}${list}<div class="sheet-actions"><button type="button" class="btn soft" data-ctl="close">取消</button></div></div>`;
+    el.hidden = false;
+  }
+  function roomOwnerOf(locId) { for (const c of N.characters) if (N.schedules[c.id] && N.schedules[c.id].home === locId) return c.id; return null; }
+  function ctlGoTo(locId) {
+    ctlCloseMenus();
+    const s = slot(), name = locName(locId);
+    s.assign[ctl.id] = { loc: locId, untilAbs: stayFor(180), act: `照你的安排，來${name}看看`, ctl: true };
+    save(true);
+    const f = $("#ctl .ctl-fade"); f.innerHTML = `<div>${person(ctl.id, 48)}<p>走去${esc(name)}…</p></div>`; f.hidden = false;
+    setTimeout(() => { if (!ctl) return; ctlEnter(locId); setTimeout(() => { f.hidden = true; }, 350); }, 700);
+    toast(`${ctl.id}：「${E.assignLine(ctl.id, name)}」`);
+  }
+  function ctlEnd(msg) {
+    if (ctl) clearInterval(ctl.aimT);
+    if (!ctl) return;
+    const s = slot(), a = s.assign[ctl.id]; if (a && a.ctl) delete s.assign[ctl.id];
+    save(true);
+    N.room3d.control(null); N.room3d.ctlMove(0, 0);
+    if (ctl.mode === "town" && N.town3d.ctl) { N.town3d.ctl.control(null); N.town3d.unmount(); }
+    window.removeEventListener("keydown", ctl.kd); window.removeEventListener("keyup", ctl.ku);
+    const box = $("#ctl"); if (box) box.remove(); document.body.classList.remove("ctl-on");
+    ctl = null; roomHost = null;
+    render(); if (msg) toast(msg);
+  }
+  function ctlClick(e) {
+    const r = e.target.closest("[data-ring]");
+    if (r) { const o = ctl.ringOpts[+r.dataset.ring]; ctlCloseMenus(); if (o && !o.dis) o.pick(); return; }
+    if (e.target.closest(".ctl-ring") && !e.target.closest(".ring-c")) return ctlCloseMenus();
+    const g = e.target.closest("[data-ctlgo]"); if (g) return ctlGoTo(g.dataset.ctlgo);
+    const sd0 = e.target.closest("[data-shopbuy],[data-shopeat],[data-shopact],[data-bageat],[data-baggive],[data-giveto],[data-datespot]");
+    if (sd0) return shopClick(sd0.dataset);
+    const b = e.target.closest("[data-ctl]"); if (!b) return;
+    const k = b.dataset.ctl;
+    if (k === "end") return ctlEnd(`${ctl.id}回到原本的行程了`);
+    if (k === "out") return ctlOut();
+    if (k === "fp") { if (CT().fp) { ctl.fp = CT().fp(!ctl.fp); ctlFPUI(); } return; }
+    if (k === "close") return ctlCloseMenus();
+    if (k === "shop") { ctl.shopGreet = null; return ctlShop(); }
+    if (k === "bag") return ctlBag(null);
+    if (k === "shopback") return ctlShop();
+    if (k === "street") { ctlCloseMenus(); const at = N.town3d.ctl.doorPos(ctl.loc); return ctlFade(ctl.loc, () => ctlEnter(ctl.loc, { street: true, at })); }
+    if (k === "talknext" || k === "talkok") return ctlTalkNext();
+    if (k === "encyes") { const s = slot(); if (s.encounter) { s.encounter.pending = false; s.encounter.startedAt = Date.now(); save(true); } return ctlTalk(); }
+    if (k === "encno") { skipEncounter(false); return ctlTalk(); }
+  }
+  // 每秒：跟著小鎮時間更新；被行程拉走（睡覺、聚會）就跟著換地方或結束
+  function ctlTick() {
+    if (!ctl) return;
+    const c = clockNow(), w = currentWhere(c)[ctl.id];
+    if (!w.avail) return ctlEnd(`${ctl.id}睏了，先回去休息`);
+    const a = slot().assign[ctl.id];
+    if (a && a.untilAbs - c.abs < 60) { a.untilAbs = stayFor(180); save(); }
+    if (w.loc !== ctl.loc) {
+      // 在小鎮上：換到另一個戶外地點只要更新名稱，不要重新載入小鎮（重新載入會把畫面弄不見）
+      const out = N.interiors && N.interiors[w.loc] && N.interiors[w.loc].outdoor && !N.interiors[w.loc].dark;
+      if (ctl.mode === "town" && out) ctl.loc = w.loc;
+      else if (ctl.mode === "town") ctlFade(w.loc, () => ctlEnter(w.loc));
+      else ctlEnter(w.loc);
+    }
+    if (ctl.mode === "town" && N.town3d.isReady()) N.town3d.update(state3d(c));
+    ctlHud();
+    ctlTalk();
   }
 
   /* ═════════ 指派 ═════════ */
@@ -1159,9 +1493,9 @@
     return [true, ""];
   }
   const BASE_GAIN = { chat: 3, food: 3, help: 3, tease: 2, date: 5, sweet: 3, confess: 5, outing: 5 };
-  function computeDelta(a, b, action, ok) {
+  function computeDelta(a, b, action, ok, base) {
     const r = getRel(a, b), pref = (N.voices[b].pref || {})[action];
-    let amt = BASE_GAIN[action] || 2;
+    let amt = base != null ? base : (BASE_GAIN[action] || 2);
     if (pref != null) amt *= pref;
     if (action === "date" || action === "confess") amt = ok ? BASE_GAIN[action] : (action === "confess" ? -2 : 0);
     if (Date.now() - (r.last || 0) < 15 * 60000) amt *= 0.34;   // 短時間內一直互動，效果遞減
@@ -1176,7 +1510,7 @@
     r.last = Date.now();
     let note = "";
     if (d.action === "confess") {
-      if (d.ok) { r.status = "交往中"; note = `${d.a}和${d.b}開始交往了。`; }
+      if (d.ok) { r.status = "交往中"; r.since = gameDay(); r.anniv = ""; note = `${d.a}和${d.b}開始交往了。`; }
       else { r.cfAt = Date.now(); note = "這次被婉拒了。過一陣子再說吧。"; }
     }
     if (d.action === "date" && !d.ok) note = "這次沒約成。";
@@ -1514,12 +1848,21 @@
           else if (!a.dating && a.id === "confess" && r.status === "交往中") { dis = "disabled"; why = "已經在交往"; }
           else if (!a.dating && r.status !== "交往中" && r.pts < a.need) { dis = "disabled"; why = `好感 ${a.need} 以上`; }
           return `<button type="button" class="act-btn love" data-act="${a.id}" ${dis}><span>${a.icon}</span>${esc(a.label)}${why ? `<small>${why}</small>` : ""}</button>`;
-        }).join("")}</div>`;
+        }).join("")}${(() => {
+          let h = "";
+          const dw = dateWhy(id, t);
+          h += `<button type="button" class="act-btn love" id="datePickBtn" ${dw ? "disabled" : ""}><span>📍</span>約會去…${dw ? `<small>${dw}以上</small>` : ""}</button>`;
+          for (const k of Object.keys(N.loveMore)) { const why = moreWhy(id, t, k); if (why === null) continue; const A = N.loveMore[k]; h += `<button type="button" class="act-btn love" data-act="${k}" ${why ? "disabled" : ""}><span>${A.icon}</span>${esc(A.label)}${why ? `<small>${/^好感/.test(why) ? why + "以上" : why}</small>` : ""}</button>`; }
+          const an = annivInfo(id, t); if (an) h += `<button type="button" class="act-btn love" data-act="anniv"><span>🎂</span>${esc(an.text)}紀念</button>`;
+          const fs = festDateOf(id, t); if (fs) h += `<button type="button" class="act-btn love" data-act="festdate"><span>🎉</span>一起過${esc(fs.name)}</button>`;
+          return h;
+        })()}</div>`;
       } else if (elig) love = "";
       $("#sheetBody").innerHTML = `<h3>${person(id, 26)}${esc(id)} → ${person(t, 26)}${esc(t)}</h3>
         <div class="rel-line">${fx ? `<span class="tag">${esc(fx.label)}</span>` : ""}${r.status ? `<span class="tag love">${esc(r.status)}</span>` : ""}<span>${esc(stageOf(r.pts, r.status))}・好感 ${r.pts}</span><div class="bar"><i style="width:${r.pts}%"></i></div></div>
         <div class="act-grid">${N.actions.map(a => `<button type="button" class="act-btn" data-act="${a.id}"><span>${a.icon}</span>${esc(a.label)}</button>`).join("")}
           <button type="button" class="act-btn out" id="outingBtn" ${r.pts >= 55 || r.status ? "" : "disabled"}><span>🧺</span>一起出去玩${r.pts >= 55 || r.status ? "" : "<small>好感 55 以上</small>"}</button></div>
+        ${[["together", "🤝 一起做事"], ["small", "✋ 小動作"], ["game", "🎲 小遊戲"]].map(([g, h]) => `<h4 style="margin-top:14px">${h}</h4><div class="act-grid">${Object.keys(N.moreActs).filter(k => N.moreActs[k].group === g).map(k => { const A = N.moreActs[k], why = moreWhy(id, t, k); return `<button type="button" class="act-btn" data-act="${k}" ${why ? "disabled" : ""}><span>${A.icon}</span>${esc(A.label)}${why ? `<small>${/^好感/.test(why) ? why + "以上" : why}</small>` : ""}</button>`; }).join("")}</div>`).join("")}
         ${love}
         <div class="sheet-actions"><button type="button" class="btn soft" data-target="">換一個人</button></div>`;
     }
@@ -1535,6 +1878,7 @@
     const c = clockNow(), where = currentWhere(c), loc = where[a].loc;
     const me0 = () => loc;
     closeSheet();
+    if ((N.moreActs && N.moreActs[action]) || (N.loveMore && N.loveMore[action]) || action === "anniv" || action === "festdate") return doMore(a, b, action);
     const clockObj = { dow: c.dow, min: c.min, date: c.date, weather: c.weather };
     if (action === "date" || action === "confess" || action === "sweet") {
       const r = getRel(a, b);
@@ -1565,6 +1909,278 @@
       clock: clockObj, delta: computeDelta(a, b, action, true) };
     save(true); render();
   }
+
+  /* ═════════ 錢包、背包、商店、更多互動 ═════════
+   * 錢包：每個人一份（存在存檔 s.wallet），每天第一次打開時領零用錢；在店裡打工也能賺。
+   * 背包：買的東西放這裡，可以自己吃，也可以送人（照每個人的喜好加好感；不喜歡的東西也只是客氣收下，不會扣）。 */
+  const MONEY = () => N.money || { name: "諾幣", start: 300, daily: 150 };
+  const gameDay = () => Math.floor(clockNow().abs / 1440);
+  const pk = arr => arr && arr.length ? arr[Math.floor(Math.random() * arr.length)] : "";
+  function pickN(arr, n) { const idx = arr.map((_, i) => i); while (idx.length > n) idx.splice(Math.floor(Math.random() * idx.length), 1); return idx.map(i => arr[i]); }   // 隨機挑 n 個，保持原本的順序
+  function fillT(t, a, b, ex) {
+    t = String(t).replace(/\{me\}/g, a).replace(/\{other\}/g, b || "");
+    for (const k in ex || {}) t = t.split("{" + k + "}").join(ex[k]);
+    return t;
+  }
+  function genSay(L, who, to, t, a, b, ex) {
+    t = fillT(t, a, b, ex).replace(/\{to\}/g, E.nick(who, to));
+    const lc = ch(to); if (lc && !lc.male) t = t.replace(/你/g, "妳");
+    L.push([who, t]);
+  }
+  function wal(id) {
+    const s = slot(); s.wallet = s.wallet || {};
+    const day = dayKeyOf(clockNow());
+    let w = s.wallet[id];
+    if (!w) w = s.wallet[id] = { money: MONEY().start, bag: {}, pay: day, work: {} };
+    if (w.pay !== day) { w.money += MONEY().daily; w.pay = day; }
+    w.work = w.work || {};
+    return w;
+  }
+  const shopAt = loc => N.shops && N.shops[loc];
+  function bagAdd(w, k, n) { w.bag[k] = (w.bag[k] || 0) + n; if (w.bag[k] <= 0) delete w.bag[k]; }
+  // 一段自己的小事件（吃東西、看展、打工）：記進日誌
+  function startGen(title, lines, cast, loc, delta, afterAct) {
+    const s = slot(), c = clockNow();
+    s.encounter = { eid: "GEN-" + Date.now().toString(36), gen: true, title, lines, step: 0, loc, cast, startedAt: Date.now(), done: false,
+      clock: { dow: c.dow, min: c.min, date: c.date, weather: c.weather }, delta: delta || null, afterAct: afterAct || "" };
+    save(true);
+    if (ctl) { ctlCloseMenus(); ctlTalk(); } else render();
+  }
+  const quipOf = id => pk((N.voices[id] && N.voices[id].quip) || ["嗯。"]);
+
+  // ── 店：買東西、內用、看展、看演出、借書、打工 ──
+  function ctlShop(msg) {
+    const sh = shopAt(ctl.loc); if (!sh) return ctlBag(null);
+    const el = $("#ctl .ctl-panel"), w = wal(ctl.id), M = MONEY().name, day = dayKeyOf(clockNow());
+    if (!ctl.shopGreet) ctl.shopGreet = pk(sh.greet);
+    const items = sh.items.map(k => {
+      const it = N.items[k]; if (!it) return "";
+      const can = w.money >= it.price;
+      return `<div class="shop-it"><span class="shop-ic">${it.icon}</span><span class="shop-n"><b>${esc(it.name)}</b><small>${it.price} ${M}${w.bag[k] ? `・背包裡有 ${w.bag[k]} 個` : ""}</small></span>`
+        + (it.eat && sh.acts.includes("eatin") ? `<button type="button" class="btn soft sm" data-shopeat="${k}" ${can ? "" : "disabled"}>內用</button>` : "")
+        + `<button type="button" class="btn primary sm" data-shopbuy="${k}" ${can ? "" : "disabled"}>買</button></div>`;
+    }).join("");
+    const acts = [];
+    if (sh.acts.includes("show")) acts.push(`<button type="button" class="btn soft block" data-shopact="show" ${w.money >= sh.show.price ? "" : "disabled"}>🎫 看展〈${esc(sh.show.title)}〉・${sh.show.price} ${M}</button>`);
+    if (sh.acts.includes("perform")) acts.push(`<button type="button" class="btn soft block" data-shopact="perform" ${w.money >= sh.perform.price ? "" : "disabled"}>🎤 看演出・${sh.perform.price} ${M}</button>`);
+    if (sh.acts.includes("borrow")) acts.push(`<button type="button" class="btn soft block" data-shopact="borrow">📖 借一本書來看（免費）</button>`);
+    if (sh.acts.includes("work")) { const done = w.work[ctl.loc] === day; acts.push(`<button type="button" class="btn soft block" data-shopact="work" ${done ? "disabled" : ""}>💼 ${esc(sh.work.label)}・+${sh.work.pay} ${M}${done ? "（今天做過了）" : ""}</button>`); }
+    el.innerHTML = `<div class="ctl-panel-in shop"><h3>${sh.icon} ${esc(sh.title)}</h3><p class="shop-greet">${esc(/^（/.test(ctl.shopGreet) ? ctl.shopGreet : "「" + ctl.shopGreet + "」")}</p>
+      <div class="shop-wallet">${person(ctl.id, 24)}<span>${esc(ctl.id)}的錢包　<b>${w.money}</b> ${M}</span><button type="button" class="btn soft sm" data-ctl="bag">🎒 背包</button></div>
+      ${msg ? `<p class="shop-msg">${esc(msg)}</p>` : ""}${items ? `<div class="shop-list">${items}</div>` : ""}${acts.length ? `<div class="shop-acts">${acts.join("")}</div>` : ""}
+      <div class="sheet-actions"><button type="button" class="btn soft" data-ctl="close">離開</button></div></div>`;
+    el.hidden = false;
+  }
+  // 背包：to 有值的時候是「要送給誰」
+  function ctlBag(to, msg) {
+    const el = $("#ctl .ctl-panel"), w = wal(ctl.id), M = MONEY().name, keys = Object.keys(w.bag).filter(k => N.items[k]);
+    const here = currentWhere(clockNow());
+    const near = N.characters.filter(o => o.id !== ctl.id && here[o.id].loc === ctl.loc && here[o.id].avail).map(o => o.id);
+    ctl.giveTo = to;
+    let body;
+    if (ctl.giveItem && !to) {
+      const it = N.items[ctl.giveItem];
+      body = `<p>要把${it.icon}${esc(it.name)}送給誰？</p>${near.length ? `<div class="chip-row">${near.map(id => `<button type="button" class="chip" data-giveto="${esc(id)}">${person(id, 22)} ${esc(id)}</button>`).join("")}</div>` : `<div class="empty">附近沒有人。走到別人身邊再送吧。</div>`}`;
+    } else body = keys.length ? `<div class="shop-list">${keys.map(k => {
+      const it = N.items[k];
+      return `<div class="shop-it"><span class="shop-ic">${it.icon}</span><span class="shop-n"><b>${esc(it.name)}</b><small>× ${w.bag[k]}</small></span>`
+        + (it.eat && !to ? `<button type="button" class="btn soft sm" data-bageat="${k}">吃掉</button>` : "")
+        + `<button type="button" class="btn primary sm" data-baggive="${k}">${to ? "送這個" : "送人"}</button></div>`;
+    }).join("")}</div>` : `<div class="empty">背包是空的。去店裡買點東西吧。</div>`;
+    el.innerHTML = `<div class="ctl-panel-in shop"><h3>🎒 ${esc(ctl.id)}的背包${to ? `　→ 送給${esc(to)}` : ""}</h3>
+      <div class="shop-wallet">${person(ctl.id, 24)}<span>錢包　<b>${w.money}</b> ${M}</span>${shopAt(ctl.loc) ? `<button type="button" class="btn soft sm" data-ctl="shopback">${shopAt(ctl.loc).icon} 回到店裡</button>` : ""}</div>
+      ${msg ? `<p class="shop-msg">${esc(msg)}</p>` : ""}${body}
+      <div class="sheet-actions"><button type="button" class="btn soft" data-ctl="close">關閉</button></div></div>`;
+    el.hidden = false;
+  }
+  function eatLines(a, it) { return [["＊", fillT(it.eat, a)], [a, quipOf(a)]]; }
+  function shopClick(d) {
+    const a = ctl.id, w = wal(a), sh = shopAt(ctl.loc), M = MONEY().name;
+    if (d.shopbuy) { const it = N.items[d.shopbuy]; if (w.money < it.price) return; w.money -= it.price; bagAdd(w, d.shopbuy, 1); save(true); return ctlShop(`買了${it.icon}${it.name}，放進背包了。`); }
+    if (d.shopeat) {
+      const it = N.items[d.shopeat]; if (w.money < it.price) return; w.money -= it.price; save(true);
+      return startGen(`${a}在${sh.title}吃${it.name}`, eatLines(a, it), [a], ctl.loc, null, `在${sh.title}吃${it.name}`);
+    }
+    if (d.bageat) { const it = N.items[d.bageat]; bagAdd(w, d.bageat, -1); save(true); return startGen(`${a}吃了${it.name}`, eatLines(a, it), [a], ctl.loc, null, `吃${it.name}`); }
+    if (d.baggive) { if (ctl.giveTo) return giveGift(a, ctl.giveTo, d.baggive); ctl.giveItem = d.baggive; return ctlBag(null); }
+    if (d.giveto) { const k = ctl.giveItem; ctl.giveItem = null; return giveGift(a, d.giveto, k); }
+    if (d.datespot) return doDateSpot(a, ctl.dateWith, d.datespot);
+    if (d.shopact === "show" || d.shopact === "perform") {
+      const sw = sh[d.shopact]; if (w.money < sw.price) return; w.money -= sw.price; save(true);
+      const L = sw.lines.map(t => ["＊", fillT(t, a)]); L.push([a, quipOf(a)]);
+      return startGen(`${a}去看了〈${sw.title}〉`, L, [a], ctl.loc, null, `在${sh.title}看〈${sw.title}〉`);
+    }
+    if (d.shopact === "borrow") {
+      const bk = pk(N.borrowBooks || ["一本書"]);
+      return startGen(`${a}借了${bk}`, [["＊", `${a}在書架之間繞了一圈，最後借了${bk}。`], ["＊", `找了個靠窗的位子坐下，一頁一頁地翻著。外面的聲音好像離得很遠。`], [a, quipOf(a)]], [a], ctl.loc, null, `在${sh.title}看${bk}`);
+    }
+    if (d.shopact === "work") {
+      const wk = sh.work, day = dayKeyOf(clockNow()); if (w.work[ctl.loc] === day) return;
+      w.work[ctl.loc] = day; w.money += wk.pay; save(true);
+      return startGen(`${a}${wk.act.replace(/^在/, "在")}`, [["＊", `${a}捲起袖子，${wk.label}。一開始手忙腳亂，後來慢慢抓到了節奏。`],
+        ["＊", `忙完的時候已經過了一個小時。老闆把${wk.pay} ${M}塞進${a}手裡：「辛苦了，明天也可以再來喔。」`], [a, quipOf(a)]], [a], ctl.loc, null, wk.act);
+    }
+  }
+  // 送禮：看對方喜不喜歡
+  const GIVE_OPEN = ["{to}，這個給你。", "{to}，路上看到的，覺得很適合你。", "{to}，送你。不用客氣。", "{to}，手伸出來一下。"];
+  const GIFT_REACT = {
+    love: ["……這個，你怎麼知道我喜歡？", "{to}，這是我最喜歡的。……謝謝。", "欸，真的可以收嗎？我會好好珍惜的。"],
+    like: ["謝謝，我很喜歡。", "喔？挺不錯的嘛。謝了，{to}。", "你有心了，謝謝。"],
+    neutral: ["謝謝你，{to}。", "嗯，我收下了。", "喔，謝啦。"],
+    dislike: ["……謝謝。我、我會想辦法用的。", "嗯……心意我收下了。", "這個嘛……謝謝你想到我。"]
+  };
+  const GIFT_GAIN = { love: 8, like: 5, neutral: 2, dislike: 0 };
+  function prefTier(b, k) {
+    const P = (N.giftPref || {})[b], tags = (N.items[k] || {}).tags || [];
+    if (!P) return "neutral";
+    if (tags.some(t => (P.love || []).includes(t))) return "love";
+    if (tags.some(t => (P.dislike || []).includes(t))) return "dislike";
+    if (tags.some(t => (P.like || []).includes(t))) return "like";
+    return "neutral";
+  }
+  function giveGift(a, b, k) {
+    const w = wal(a), it = N.items[k]; if (!it || !w.bag[k]) return;
+    bagAdd(w, k, -1); ctl.giveTo = null;
+    const tier = prefTier(b, k), L = [];
+    CT().ctlApproach && CT().ctlApproach(b);
+    genSay(L, a, b, pk(GIVE_OPEN), a, b);
+    L.push(["＊", `${a}把${it.icon}${it.name}遞給了${b}。`]);
+    L.push(["＊", fillT(pk(N.voices[b].react), b, a)]);
+    genSay(L, b, a, pk(GIFT_REACT[tier]), a, b);
+    const TT = { love: "（好像是最喜歡的東西）", like: "（看起來很喜歡）", neutral: "", dislike: "（好像不太合口味……）" };
+    startGen(`${a}送給${b}${it.name}${TT[tier]}`, L, [a, b], ctl.loc, computeDelta(a, b, "gift", true, GIFT_GAIN[tier]), `和${b}說話`);
+  }
+
+  // ── 一般互動與親密小動作 ──
+  const MORE_TITLE = { pat: "{a}摸了摸{b}的頭", shoulder: "{a}拍拍{b}的肩", tsukkomi: "{a}吐槽了{b}", gossip: "{a}和{b}聊八卦", highfive: "{a}和{b}擊掌",
+    rps: "{a}和{b}猜拳", arm: "{a}和{b}比腕力", quiz: "{a}和{b}的問答比賽", hand: "{a}牽起{b}的手", lean: "{a}靠在{b}的肩上", hug: "{a}抱了抱{b}", feed: "{a}餵{b}吃了一口",
+    walk: "{a}和{b}一起散步", meal: "{a}和{b}一起吃飯", read: "{a}和{b}一起讀書", photo: "{a}和{b}一起拍照" };
+  // 能不能做：回傳 "" 可以、字串是原因、null 是根本不顯示
+  function moreWhy(a, b, k) {
+    const A = N.moreActs[k] || N.loveMore[k], r = getRel(a, b);
+    if (N.loveMore[k]) {
+      const [elig] = loveEligible(a, b);
+      if (!elig || !r.route) return null;
+      if (A.adult && !(N.ageGroup[a] === "adult" && N.ageGroup[b] === "adult")) return null;   // 高中生只到牽手、靠肩
+      if (A.dating && r.status !== "交往中") return "交往後";
+    }
+    if (A.need && r.status !== "交往中" && r.pts < A.need) return `好感${A.need}`;
+    return "";
+  }
+  function dateWhy(a, b) { const r = getRel(a, b); return r.status === "交往中" || isCP(a, b) || r.pts >= 70 ? "" : "好感70"; }
+  const CN = ["", "一", "兩", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二"];
+  function annivInfo(a, b) {
+    let r = getRel(a, b); if (r.status !== "交往中") return null;
+    const today = gameDay();
+    if (r.since == null) { r = Object.assign({}, r, { since: today }); setRel(a, b, r); save(); }
+    const days = today - r.since;
+    let key = null, text = "";
+    if (days >= 30) { const n = Math.floor(days / 30); key = "m" + n; text = n % 12 === 0 ? `${CN[n / 12] || n / 12}年` : `${CN[n] || n}個月`; }
+    else if (days >= 7) { key = "w"; text = "一個禮拜"; }
+    if (!key || r.anniv === key) return null;
+    return { key, text };
+  }
+  function festDateOf(a, b) {
+    const r = getRel(a, b), [elig] = loveEligible(a, b);
+    if (!elig || !r.route || dateWhy(a, b)) return null;
+    const c = clockNow(), f = todayFests(c)[0];
+    if (!f || r.fest === dayKeyOf(c) + f.id) return null;
+    return f;
+  }
+  // 自己跟著走過去（操控中就換房間；在小鎮上就只改名字）
+  function moveSelf(a, loc, act, min) {
+    const s = slot();
+    if (ctl && ctl.id === a) {
+      s.assign[a] = { loc, untilAbs: stayFor(180), act, ctl: true }; save(true);
+      if (loc !== ctl.loc) ctlFade(loc, () => ctlEnter(loc));
+    } else s.assign[a] = { loc, untilAbs: stayFor(min || 90), act };
+  }
+  function doMore(a, b, id) {
+    const s = slot(), c = clockNow(), where = currentWhere(c);
+    let loc = where[a].loc;
+    const r = getRel(a, b);
+    if (id === "anniv" || id === "festdate") {
+      const S = id === "anniv" ? N.loveSpecial.anniv : N.loveSpecial.fest, ex = { place: locName(loc) };
+      let gain = S.gain;
+      if (id === "anniv") { const an = annivInfo(a, b); if (!an) return toast("今天不是紀念日"); ex.n = an.text; setRel(a, b, Object.assign({}, getRel(a, b), { anniv: an.key })); }
+      else {
+        const f = festDateOf(a, b); if (!f) return toast("今天沒有節日");
+        ex.fest = f.name; const go = (f.locs && f.locs[0]) || loc; ex.place = locName(go);
+        setRel(a, b, Object.assign({}, getRel(a, b), { fest: dayKeyOf(c) + f.id }));
+        if (go !== loc) { s.assign[b] = { loc: go, untilAbs: stayFor(90), act: `和${a}一起過${f.name}` }; moveSelf(a, go, `和${b}一起過${f.name}`); loc = go; }
+      }
+      const L = [];
+      genSay(L, a, b, pk(S.open), a, b, ex);
+      const lv = N.voices[b].love;
+      genSay(L, b, a, pk((lv && lv.sweet) || N.okLines[b] || ["嗯。"]), a, b, ex);
+      for (const m of pickN(S.mid, 2)) L.push(["＊", fillT(m, a, b, ex)]);
+      if (N.voices[a].love) genSay(L, a, b, pk(N.voices[a].love.sweet), a, b, ex);
+      genSay(L, b, a, pk(S.end), a, b, ex);
+      const title = id === "anniv" ? `${a}和${b}的${ex.n}紀念日` : `${a}和${b}一起過${ex.fest}`;
+      if (id === "anniv") pushNews({ kind: "love", text: `🎂 ${a}和${b}在一起滿${ex.n}了。`, cast: [a, b], loc });
+      return startGen(title, L, [a, b], loc, computeDelta(a, b, id, true, gain), title.replace(`${a}和${b}`, `和${b}`));
+    }
+    const A = N.moreActs[id] || N.loveMore[id];
+    const why = moreWhy(a, b, id); if (why) return toast(`${why}以上才能這樣做`); if (why === null) return;
+    let go = null;
+    if (A.go) go = pk(A.go.filter(x => x !== loc)) || A.go[0];
+    const ex = { go: go ? locName(go) : "", place: locName(loc) }, L = [];
+    genSay(L, a, b, pk(A.open), a, b, ex);
+    if (A.group === "together" || A.game) genSay(L, b, a, pk(N.okLines[b] || ["好啊。"]), a, b, ex);
+    for (const m of (A.game ? A.mid : pickN(A.mid, 2))) L.push(["＊", fillT(m, a, b, ex)]);
+    if (A.game) {
+      const win = Math.random() < 0.5 ? a : b, lose = win === a ? b : a;
+      L.push(["＊", `${win}贏了。`]);
+      genSay(L, win, lose, pk(N.winLines[win] || ["我贏了。"]), a, b, ex);
+      genSay(L, lose, win, pk(N.loseLines[lose] || ["輸了。"]), a, b, ex);
+    } else {
+      const endBy = id === "lean" ? a : b;
+      genSay(L, endBy, endBy === a ? b : a, pk(A.end), a, b, ex);
+    }
+    if (N.life && N.life.onAction) N.life.onAction(id, a, b);
+    const title = (MORE_TITLE[id] || "{a}和{b}" + A.label).replace("{a}", a).replace("{b}", b);
+    let after = `和${b}說話`;
+    if (go) {
+      s.assign[b] = { loc: go, untilAbs: stayFor(90), act: fillT(A.act, b, a) };
+      after = fillT(A.act, a, b); moveSelf(a, go, after); loc = go;
+    }
+    if (ctl && !go && CT().ctlApproach) CT().ctlApproach(b);
+    startGen(title, L, [a, b], loc, computeDelta(a, b, id, true, A.gain), after);
+  }
+
+  // ── 約會：選地點 ──
+  function ctlDatePick(b) {
+    ctl.dateWith = b;
+    const el = $("#ctl .ctl-panel");
+    el.innerHTML = `<div class="ctl-panel-in"><h3>📍 ${esc(ctl.id)}約${esc(b)}去哪裡？</h3>
+      <div class="chip-row">${N.dateSpots.map(sp => `<button type="button" class="chip loc-chip" data-datespot="${esc(sp.loc)}">${sp.icon} ${esc(sp.label)}</button>`).join("")}</div>
+      <div class="sheet-actions"><button type="button" class="btn soft" data-ctl="close">取消</button></div></div>`;
+    el.hidden = false;
+  }
+  const DATE_INVITE = ["{to}，等一下……要不要一起去{go}？", "{to}，我想跟你去{go}。現在。", "{to}，{go}那邊，陪我去一趟好嗎？"];
+  const DATE_END = ["今天……很開心。", "下次再一起來吧。", "謝謝你約我。", "時間過得好快。"];
+  function doDateSpot(a, b, spotLoc) {
+    const sp = N.dateSpots.find(x => x.loc === spotLoc); if (!sp || !b) return;
+    const r = getRel(a, b), dating = r.status === "交往中", ex = { go: locName(sp.loc), place: locName(sp.loc) }, L = [];
+    const la = N.voices[a].love, lb = N.voices[b].love;
+    genSay(L, a, b, pk(DATE_INVITE), a, b, ex);
+    genSay(L, b, a, pk(dating && lb ? lb.yesDate : N.okLines[b] || ["好啊。"]), a, b, ex);
+    L.push(["＊", fillT(sp.beats[0], a, b, ex)]);
+    genSay(L, a, b, dating && la ? pk(la.sweet) : quipOf(a), a, b, ex);
+    L.push(["＊", fillT(sp.beats[1], a, b, ex)]);
+    genSay(L, b, a, dating && lb ? pk(lb.sweet) : quipOf(b), a, b, ex);
+    L.push(["＊", fillT(sp.beats[2], a, b, ex)]);
+    genSay(L, b, a, pk(DATE_END), a, b, ex);
+    s0assign(b, sp.loc, `和${a}去${sp.label}約會`);
+    const after = `和${b}去${sp.label}約會`;
+    moveSelf(a, sp.loc, after);
+    startGen(`${a}和${b}去${sp.label}約會`, L, [a, b], sp.loc, computeDelta(a, b, "datespot", true, 6), after);
+  }
+  function s0assign(id, loc, act) { slot().assign[id] = { loc, untilAbs: stayFor(90), act }; }
+  Object.assign(BASE_GAIN, { gift: 2, datespot: 6, anniv: 8, festdate: 6 });
+  for (const k in N.moreActs || {}) BASE_GAIN[k] = N.moreActs[k].gain;
+  for (const k in N.loveMore || {}) BASE_GAIN[k] = N.loveMore[k].gain;
+  N._shopDbg = { doMore, ringMenu, giveGift, wal, doDateSpot, annivInfo, festDateOf, ring: b => ctlPersonRing(b, 500, 350), getRel, setRel, ctl: () => ctl };
 
   /* ═════════ 手機 ═════════ */
   function openPhone() {
@@ -1941,6 +2557,11 @@
         <h4>介面顏色</h4>
         <div class="seg seg-grid">${[["town", "🕰️ 跟著小鎮時間"], ["system", "📱 跟著手機"], ["light", "☀️ 白天"], ["dark", "🌙 夜晚"]].map(([v, t]) => `<button type="button" data-theme="${v}" class="${(store.ui.theme || "town") === v ? "on" : ""}">${t}</button>`).join("")}</div>
       </section>
+      <section ${isPhone() ? "hidden" : ""}>
+        <h4>3D 畫質</h4>
+        <p class="muted" style="margin:0 0 8px">高畫質是完整的城市、光影和夜景；輕量城市是同樣的建築和夜景，範圍小一點、光影簡單一點（電腦比較舊時用）；簡化小鎮是最早的方塊小鎮。手機只顯示街區圖。換了之後會重新載入。</p>
+        <div class="seg">${[["auto", "🪄 自動"], ["high", "✨ 高畫質"], ["mobile", "🏙️ 輕量城市"], ["low", "🧊 簡化小鎮"]].map(([v, t]) => { let q = "auto"; try { q = localStorage.getItem("novum-quality") || "auto"; } catch (e) { } return `<button type="button" data-quality="${v}" class="${q === v ? "on" : ""}">${t}</button>`; }).join("")}</div>
+      </section>
       <section>
         <h4>音樂</h4>
         <button type="button" class="mode-opt ${N.lofi && N.lofi.isPlaying() ? "on" : ""}" id="musicBtn2"><b>🎵 背景音樂（每個地方曲風不同）：${N.lofi && N.lofi.isPlaying() ? "開" : "關"}</b></button>
@@ -2054,6 +2675,8 @@
     if (t.id === "assignBtn") return openAssign();
     if (t.id === "interactBtn") return openInteract();
     if (t.id === "phoneBtn") return openPhone();
+    if (t.id === "ctlBtn") return ctlStart(slot().observing);
+    if (d.ctlstart) { hideCard3d(); return ctlStart(d.ctlstart); }
     if (t.id === "relBtn") return openRel();
     if (t.id === "graphBtn") { sheetState.graph = !sheetState.graph; renderRel(); return; }
     if (t.id === "partyBtn") return openParty();
@@ -2067,6 +2690,8 @@
     if (t.id === "partyGo") return startParty();
     if (t.id === "outingBtn") return renderOutingPick();
     if (t.id === "outingBack") return renderInteract();
+    if (t.id === "datePickBtn") { $("#sheetBody").innerHTML = `<h3>📍 ${esc(sheetState.who)}約${esc(sheetState.target)}去哪裡？</h3><div class="chip-row">${N.dateSpots.map(sp => `<button type="button" class="chip loc-chip" data-datespot="${esc(sp.loc)}">${sp.icon} ${esc(sp.label)}</button>`).join("")}</div><div class="sheet-actions"><button type="button" class="btn soft" id="outingBack">返回</button></div>`; return; }
+    if (d.datespot && !t.closest("#ctl")) { const a = sheetState.who, b = sheetState.target; closeSheet(); return doDateSpot(a, b, d.datespot); }
     if (d.outing) return startOuting(d.outing);
     if (d.route) {
       const a = sheetState.who, b = d.route, r = Object.assign({}, getRel(a, b));
@@ -2095,6 +2720,7 @@
     if (d.view3d !== undefined) { store.ui.town3d = d.view3d === "1"; save(); if (!store.ui.town3d && N.town3d) N.town3d.unmount(); return render(); }
     if (d.fly) { if (N.town3d) N.town3d.flyRegion(d.fly); store.ui.region = d.fly; return; }
     if (t.id === "t3dHome") { N.town3d.home(); hideCard3d(); return; }
+    if (d.rot3d) { N.town3d.rotate(+d.rot3d * Math.PI / 4); return; }
     if (t.id === "t3dLabels") { store.ui.labels3d = store.ui.labels3d === false; N.town3d.setLabels(store.ui.labels3d !== false); t.classList.toggle("on", store.ui.labels3d !== false); save(); return; }
     if (t.id === "t3dWatch") return enterWatch();
     if (t.id === "musicBtn") { const on = N.lofi.toggle(); store.ui.music = !!on; save(); updateMusicBtn(); return toast(on ? "🎵 lofi 播放中" : "音樂已關閉"); }
@@ -2158,6 +2784,7 @@
     if (t.id === "provBtn") return renderProvisional();
     if (d.pace) { store.pace = d.pace; save(true); return renderSettings(); }
     if (d.theme) { store.ui.theme = d.theme; save(true); applyTheme(); return renderSettings(); }
+    if (d.quality) { try { localStorage.setItem("novum-quality", d.quality); } catch (e) { } save(true); return location.reload(); }
     if (t.id === "needsToggle") { store.needs = store.needs === false; save(true); render(); return renderSettings(); }
     if (t.id === "musicBtn2") { const on = N.lofi.toggle(); store.ui.music = !!on; save(); updateMusicBtn(); return renderSettings(); }
     if (t.id === "bondToggle") { store.bond = store.bond === false; save(true); return renderSettings(); }
@@ -2247,6 +2874,7 @@
         const old = sheetState.sig; renderLocationSheet(); if (old === sheetState.sig) { /* 無變化 */ }
       }
     }
+    if (ctl) ctlTick();
     if (document.visibilityState === "visible") {
       updatePlans(); genNews(c); ensureDiary(c); lifeSync(c);
       if (view === "town" && use3d() && N.town3d.isReady() && $("#t3d")) {
@@ -2313,8 +2941,8 @@
     // 沒有要蓋 3D 小鎮的話，載入頁直接收起來；要蓋的話等小鎮蓋好
     if (N.splash && !(view === "town" && use3d())) N.splash.done();
     setTimeout(() => N.splash && N.splash.done(), 20000);   // 保險：最多等 20 秒
-    if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
+    try { if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
       navigator.serviceWorker.register("sw.js").catch(() => { /* 不支援時照常運作 */ });
-    }
+    } } catch (e) { /* 預覽環境不能用離線快取，照常運作 */ }
   })();
 })();

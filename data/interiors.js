@@ -305,112 +305,130 @@ NOVUM.interiors = {
     ["plant", 0.97, 0.97, { seed: 9 }]
   ] },
   "諾文轉角騎樓": { outdoor: true, theme: { ground: "tile" }, items: [
-    ["newsstand", 0.3, 0.12, {}],
-    ["bench2", 0.7, 0.72, { c: 0x6B5A4A }],
-    ["streetlamp", 0.95, 0.1, {}], ["trash", 0.85, 0.12, {}],
-    ["vending", 0.06, 0.6, { rot: 90 }],
-    ["bike", 0.45, 0.85, {}]
+    ["newsstand", 0.25, 0.1, {}], ["trash", 0.42, 0.06, {}],
+    ["vending", 0.05, 0.38, { rot: 90 }], ["vending", 0.05, 0.52, { rot: 90 }],
+    ["bike", 0.68, 0.08, {}], ["bike", 0.78, 0.08, {}], ["bike", 0.88, 0.08, {}],
+    ["bench2", 0.45, 0.5, { c: 0x6B5A4A }], ["bench2", 0.72, 0.5, { c: 0x6B5A4A }],
+    ["plant", 0.3, 0.5, { seed: 2 }], ["plant", 0.88, 0.5, { seed: 5 }],
+    ["streetlamp", 0.95, 0.85, {}], ["streetlamp", 0.08, 0.85, {}]
   ] },
   "諾文石造街區": { outdoor: true, theme: { ground: "stone" }, items: [
-    ["bench2", 0.3, 0.62, { c: 0x8C8478 }],
-    ["well", 0.68, 0.4, {}],
-    ["stonelamp", 0.1, 0.12, {}], ["stonelamp", 0.92, 0.88, {}],
-    ["plant", 0.95, 0.08, { seed: 3 }], ["bush", 0.06, 0.92, {}]
+    ["well", 0.5, 0.4, {}],
+    ["bench2", 0.24, 0.42, { c: 0x8C8478, rot: 90 }], ["bench2", 0.76, 0.42, { c: 0x8C8478, rot: -90 }],
+    ["stonelamp", 0.32, 0.18, {}], ["stonelamp", 0.68, 0.18, {}], ["stonelamp", 0.32, 0.66, {}], ["stonelamp", 0.68, 0.66, {}],
+    ["tree", 0.08, 0.1, { seed: 3 }], ["tree", 0.92, 0.1, { seed: 6 }],
+    ["bush", 0.05, 0.55, {}], ["bush", 0.95, 0.55, {}],
+    ["crates", 0.9, 0.8, {}], ["plant", 0.1, 0.82, { seed: 4 }]
   ] },
   "佩洛・塗鴉街": { outdoor: true, theme: { ground: "asphalt" }, items: [
     ["graffiti", 0.5, 0.0, {}],
-    ["crates", 0.15, 0.3, {}],
-    ["beanbag", 0.62, 0.7, { c: 0x8EEA3A }],
-    ["spray", 0.4, 0.3, {}],
-    ["trash", 0.9, 0.2, {}], ["streetlamp", 0.95, 0.85, {}]
+    ["crates", 0.08, 0.22, {}], ["boxes", 0.16, 0.32, {}],
+    ["spray", 0.32, 0.14, {}], ["amp", 0.7, 0.16, {}],
+    ["beanbag", 0.42, 0.48, { c: 0x8EEA3A }], ["beanbag", 0.58, 0.48, { c: 0xFF4AC8 }],
+    ["trash", 0.92, 0.18, {}], ["bike", 0.12, 0.8, {}],
+    ["streetlamp", 0.95, 0.85, {}]
   ] },
   "諾文立體街廊": { outdoor: true, theme: { ground: "tile" }, items: [
-    ["bench2", 0.3, 0.5, { c: 0x6F8090 }], ["bench2", 0.7, 0.5, { c: 0x6F8090 }],
-    ["stairs", 0.06, 0.3, {}],
-    ["vending", 0.95, 0.15, { rot: -90 }],
-    ["plant", 0.5, 0.08, { seed: 2 }], ["streetlamp", 0.95, 0.9, {}],
-    ["bunting", 0.5, 0.0, {}]
+    ["stairs", 0.06, 0.25, {}],
+    ["bunting", 0.5, 0.0, {}],
+    ["plant", 0.3, 0.06, { seed: 2 }], ["plant", 0.5, 0.06, { seed: 7 }], ["plant", 0.7, 0.06, { seed: 4 }],
+    ["bench2", 0.38, 0.45, { c: 0x6F8090 }], ["bench2", 0.62, 0.45, { c: 0x6F8090 }],
+    ["vending", 0.95, 0.25, { rot: -90 }], ["vending", 0.95, 0.4, { rot: -90 }],
+    ["streetlamp", 0.2, 0.85, {}], ["streetlamp", 0.8, 0.85, {}]
   ] },
 
   /* ═════════ 戶外 ═════════ */
   "諾文鐘塔廣場": { outdoor: true, theme: { ground: "stone" }, items: [
-    ["clocktower", 0.5, 0.2, {}],
-    ["bench2", 0.2, 0.7, { c: 0x6B5A4A }], ["bench2", 0.8, 0.7, { c: 0x6B5A4A }],
-    ["streetlamp", 0.05, 0.1, {}], ["streetlamp", 0.95, 0.1, {}],
-    ["flowers", 0.3, 0.3, {}], ["flowers", 0.7, 0.3, {}],
-    ["hydrant", 0.95, 0.95, {}]
+    ["clocktower", 0.5, 0.42, { big: true }],
+    ["bench2", 0.5, 0.6, { c: 0x6B5A4A }], ["bench2", 0.5, 0.24, { c: 0x6B5A4A, rot: 180 }],
+    ["bench2", 0.28, 0.42, { c: 0x6B5A4A, rot: 90 }], ["bench2", 0.72, 0.42, { c: 0x6B5A4A, rot: -90 }],
+    ["streetlamp", 0.32, 0.28, {}], ["streetlamp", 0.68, 0.28, {}], ["streetlamp", 0.32, 0.56, {}], ["streetlamp", 0.68, 0.56, {}],
+    ["flowers", 0.42, 0.32, {}], ["flowers", 0.58, 0.32, {}], ["flowers", 0.42, 0.52, {}], ["flowers", 0.58, 0.52, {}],
+    ["tree", 0.06, 0.05, { seed: 1 }], ["tree", 0.94, 0.05, { seed: 2 }], ["tree", 0.06, 0.3, { seed: 3 }], ["tree", 0.94, 0.3, { seed: 4 }],
+    ["tree", 0.06, 0.55, { seed: 5 }], ["tree", 0.94, 0.55, { seed: 6 }], ["tree", 0.06, 0.8, { seed: 7 }], ["tree", 0.94, 0.8, { seed: 8 }],
+    ["fountain", 0.5, 0.8, {}],
+    ["bench2", 0.36, 0.8, { c: 0x6B5A4A, rot: 90 }], ["bench2", 0.64, 0.8, { c: 0x6B5A4A, rot: -90 }],
+    ["newsstand", 0.82, 0.94, {}], ["hydrant", 0.18, 0.94, {}]
   ] },
   "諾文公園": { outdoor: true, theme: { ground: "grass" }, items: [
-    ["path", 0.5, 0.5, { w: 1.0, d: 4.2 }],
-    ["fountain", 0.5, 0.45, {}],
-    ["tree", 0.1, 0.15, { seed: 1, s: 1.3 }], ["tree", 0.88, 0.12, { seed: 2, s: 1.2 }], ["tree", 0.95, 0.8, { seed: 3 }],
-    ["bench2", 0.2, 0.7, { c: 0x6B5A4A }], ["bench2", 0.78, 0.55, { c: 0x6B5A4A, rot: -90 }],
-    ["flowers", 0.25, 0.4, {}], ["bush", 0.06, 0.9, {}],
-    ["streetlamp", 0.38, 0.92, {}]
+    ["path", 0.5, 0.5, { w: 1.4, d: 10.6 }],
+    ["fountain", 0.5, 0.42, {}],
+    ["tree", 0.1, 0.08, { seed: 1 }], ["tree", 0.9, 0.08, { seed: 2 }], ["tree", 0.1, 0.66, { seed: 3 }], ["tree", 0.9, 0.66, { seed: 4 }],
+    ["bench2", 0.27, 0.42, { c: 0x6B5A4A, rot: 90 }], ["bench2", 0.73, 0.42, { c: 0x6B5A4A, rot: -90 }],
+    ["flowers", 0.34, 0.22, {}], ["flowers", 0.66, 0.22, {}], ["flowers", 0.34, 0.62, {}], ["flowers", 0.66, 0.62, {}],
+    ["bush", 0.05, 0.38, {}], ["bush", 0.95, 0.38, {}],
+    ["streetlamp", 0.4, 0.85, {}], ["streetlamp", 0.6, 0.85, {}]
   ] },
   "諾文生活區": { outdoor: true, theme: { ground: "tile" }, items: [
-    ["bench2", 0.3, 0.72, { c: 0x6B5A4A }],
-    ["vending", 0.06, 0.3, { rot: 90 }],
-    ["trash", 0.2, 0.08, {}], ["hydrant", 0.85, 0.15, {}],
-    ["bike", 0.6, 0.15, {}], ["bike", 0.72, 0.18, {}],
-    ["flowers", 0.9, 0.8, {}], ["streetlamp", 0.5, 0.95, {}],
-    ["sign", 0.95, 0.4, { c: 0x2F6B5A }]
+    ["board", 0.5, 0.0, {}],
+    ["bike", 0.12, 0.08, {}], ["bike", 0.2, 0.08, {}], ["bike", 0.28, 0.08, {}],
+    ["newsstand", 0.76, 0.1, {}],
+    ["vending", 0.95, 0.32, { rot: -90 }], ["vending", 0.95, 0.46, { rot: -90 }],
+    ["bench2", 0.35, 0.45, { c: 0x6B5A4A }], ["bench2", 0.62, 0.45, { c: 0x6B5A4A }],
+    ["tree", 0.1, 0.62, { seed: 5 }], ["flowers", 0.5, 0.62, {}],
+    ["trash", 0.85, 0.62, {}], ["hydrant", 0.92, 0.82, {}],
+    ["streetlamp", 0.95, 0.85, {}]
   ] },
   "諾文夜市": { outdoor: true, theme: { ground: "asphalt" }, items: [
-    ["stall", 0.18, 0.2, { c: 0xD8402A, seed: 0 }],
-    ["stall", 0.5, 0.2, { c: 0x2A9A9A, seed: 1 }],
-    ["stall", 0.82, 0.2, { c: 0xF4A040, seed: 2 }],
-    ["lanterns", 0.5, 0.55, {}],
-    ["table", 0.3, 0.78, { c: 0xC8B088, seats: 2, ramen: true }],
-    ["table", 0.72, 0.8, { c: 0xC8B088, seats: 2, bowls: true }]
+    ["stall", 0.1, 0.06, { c: 0xD8402A, seed: 0 }], ["stall", 0.36, 0.06, { c: 0x2A9A9A, seed: 1 }],
+    ["stall", 0.64, 0.06, { c: 0xF4A040, seed: 2 }], ["stall", 0.9, 0.06, { c: 0xE07A96, seed: 3 }],
+    ["stall", 0.1, 0.99, { c: 0x3E6A9A, seed: 4, rot: 180 }], ["stall", 0.36, 0.99, { c: 0x5A9A4A, seed: 5, rot: 180 }],
+    ["stall", 0.64, 0.99, { c: 0xD8402A, seed: 6, rot: 180 }], ["stall", 0.9, 0.99, { c: 0xF4A040, seed: 7, rot: 180 }],
+    ["lanterns", 0.5, 0.5, {}],
+    ["table", 0.25, 0.5, { c: 0xC8B088, seats: 2, ramen: true }],
+    ["table", 0.75, 0.5, { c: 0xC8B088, seats: 2, bowls: true }]
   ] },
   "諾文舊物市場": { outdoor: true, theme: { ground: "stone" }, items: [
-    ["stall", 0.22, 0.2, { c: 0x8A6A4A, seed: 3 }],
-    ["stall", 0.7, 0.2, { c: 0x6A4A6A, seed: 1 }],
-    ["mirror", 0.95, 0.5, { rot: -90 }],
-    ["crates", 0.15, 0.7, {}],
+    ["stall", 0.2, 0.12, { c: 0x8A6A4A, seed: 3 }], ["stall", 0.5, 0.12, { c: 0x6A4A6A, seed: 1 }], ["stall", 0.8, 0.12, { c: 0x4A6A5A, seed: 5 }],
     ["clock", 0.5, 0.0, {}],
-    ["record", 0.55, 0.75, {}],
-    ["bench2", 0.82, 0.85, { c: 0x6B5A4A }]
+    ["crates", 0.05, 0.3, {}], ["boxes", 0.06, 0.42, {}], ["crates", 0.95, 0.3, {}], ["record", 0.94, 0.42, { rot: -90 }],
+    ["bench2", 0.38, 0.55, { c: 0x6B5A4A }], ["bench2", 0.62, 0.55, { c: 0x6B5A4A }],
+    ["tree", 0.1, 0.72, { seed: 7 }], ["tree", 0.9, 0.72, { seed: 8 }],
+    ["stonelamp", 0.3, 0.85, {}], ["stonelamp", 0.7, 0.85, {}]
   ] },
   "諾文河岸步道": { outdoor: true, theme: { ground: "grass" }, items: [
-    ["water", 0.5, 0.12, { w: 6.2, d: 1.4 }],
-    ["path", 0.5, 0.6, { w: 6.2, d: 0.9, c: 0xC8B898 }],
-    ["bench2", 0.3, 0.82, { c: 0x6B5A4A, rot: 180 }], ["bench2", 0.72, 0.82, { c: 0x6B5A4A, rot: 180 }],
-    ["tree", 0.06, 0.9, { seed: 4 }], ["tree", 0.95, 0.88, { seed: 5 }],
-    ["streetlamp", 0.5, 0.95, {}], ["flowers", 0.15, 0.48, {}]
+    ["water", 0.5, 0.1, { w: 10.6, d: 1.8 }],
+    ["path", 0.5, 0.42, { w: 10.6, d: 1.4, c: 0xC8B898 }],
+    ["bench2", 0.3, 0.3, { c: 0x6B5A4A, rot: 180 }], ["bench2", 0.7, 0.3, { c: 0x6B5A4A, rot: 180 }],
+    ["streetlamp", 0.12, 0.3, {}], ["streetlamp", 0.5, 0.3, {}], ["streetlamp", 0.88, 0.3, {}],
+    ["rocks", 0.06, 0.22, {}], ["rocks", 0.94, 0.22, {}],
+    ["tree", 0.12, 0.72, { seed: 4 }], ["tree", 0.88, 0.72, { seed: 5 }],
+    ["flowers", 0.35, 0.66, {}], ["flowers", 0.65, 0.66, {}], ["bush", 0.5, 0.7, {}]
   ] },
   "諾文地下湖": { dark: true, outdoor: true, theme: { ground: "cave" }, items: [
-    ["water", 0.5, 0.22, { w: 6.2, d: 2.0 }],
-    ["dock", 0.5, 0.42, { rot: 90 }],
-    ["rocks", 0.08, 0.7, {}], ["rocks", 0.9, 0.8, {}], ["rocks", 0.95, 0.15, {}],
-    ["rods", 0.66, 0.5, {}],
-    ["net", 0.2, 0.85, {}],
-    ["stonelamp", 0.3, 0.6, {}], ["candles", 0.75, 0.75, { n: 3, power: 0.6 }],
-    ["bench2", 0.42, 0.78, { c: 0x5A4632 }]
+    ["water", 0.5, 0.3, { w: 16.4, d: 7.6 }],
+    ["dock", 0.46, 0.5, { l: 3.6 }],
+    ["rocks", 0.03, 0.62, {}], ["rocks", 0.96, 0.66, {}], ["rocks", 0.97, 0.08, {}], ["rocks", 0.04, 0.06, {}], ["rocks", 0.25, 0.6, {}],
+    ["rods", 0.58, 0.66, {}],
+    ["net", 0.18, 0.86, {}],
+    ["stonelamp", 0.32, 0.7, {}], ["stonelamp", 0.78, 0.7, {}], ["candles", 0.66, 0.84, { n: 3, power: 0.6 }],
+    ["bench2", 0.44, 0.82, { c: 0x5A4632 }]
   ] },
   "諾文轉運站": { outdoor: true, theme: { ground: "tile" }, items: [
-    ["platform", 0.5, 0.22, { w: 6.2, d: 1.2 }],
-    ["rails", 0.5, 0.0, { w: 6.2 }],
-    ["bench2", 0.25, 0.62, { c: 0x4A6E8A }], ["bench2", 0.7, 0.62, { c: 0x4A6E8A }],
-    ["vending", 0.95, 0.75, { rot: -90 }],
-    ["board", 0.06, 0.6, { rot: 90 }],
-    ["streetlamp", 0.5, 0.92, {}]
+    ["rails", 0.5, 0.0, { w: 11.2 }],
+    ["platform", 0.5, 0.2, { w: 10.6, d: 1.4 }],
+    ["bench2", 0.28, 0.42, { c: 0x4A6E8A }], ["bench2", 0.55, 0.42, { c: 0x4A6E8A }],
+    ["vending", 0.88, 0.42, {}], ["trash", 0.72, 0.44, {}],
+    ["board", 0.05, 0.55, { rot: 90 }],
+    ["plant", 0.4, 0.78, { seed: 2 }],
+    ["streetlamp", 0.1, 0.85, {}], ["streetlamp", 0.9, 0.85, {}]
   ] },
   "諾文舊站": { outdoor: true, theme: { ground: "stone" }, items: [
-    ["platform", 0.5, 0.22, { w: 6.2, d: 1.2 }],
-    ["rails", 0.5, 0.0, { w: 6.2 }],
-    ["bench2", 0.4, 0.66, { c: 0x5A4632 }],
-    ["clock", 0.85, 0.0, {}],
-    ["stonelamp", 0.1, 0.6, {}], ["stonelamp", 0.9, 0.6, {}],
-    ["boxes", 0.15, 0.9, {}], ["sign", 0.7, 0.85, { c: 0x5A4632 }]
+    ["rails", 0.5, 0.0, { w: 11.2 }],
+    ["platform", 0.5, 0.2, { w: 10.6, d: 1.4 }],
+    ["clock", 0.8, 0.0, {}],
+    ["bench2", 0.42, 0.42, { c: 0x5A4632 }], ["bench2", 0.68, 0.42, { c: 0x5A4632 }],
+    ["stonelamp", 0.15, 0.42, {}], ["stonelamp", 0.9, 0.42, {}],
+    ["crates", 0.12, 0.8, {}], ["boxes", 0.22, 0.82, {}],
+    ["sign", 0.75, 0.85, { c: 0x5A4632 }]
   ] },
   "諾文機械市集": { outdoor: true, theme: { ground: "asphalt" }, items: [
-    ["stall", 0.2, 0.2, { c: 0x5A6A7A, seed: 2 }],
-    ["machine", 0.55, 0.18, {}],
-    ["stall", 0.85, 0.2, { c: 0xB8903A, seed: 0 }],
-    ["gears", 0.55, 0.0, {}],
-    ["crates", 0.15, 0.75, {}], ["parts", 0.95, 0.7, { rot: -90 }],
-    ["welder", 0.5, 0.75, {}]
+    ["stall", 0.2, 0.12, { c: 0x5A6A7A, seed: 2 }], ["machine", 0.5, 0.14, {}], ["stall", 0.8, 0.12, { c: 0xB8903A, seed: 0 }],
+    ["gears", 0.5, 0.0, {}],
+    ["crates", 0.08, 0.5, {}], ["boxes", 0.16, 0.58, {}],
+    ["welder", 0.4, 0.52, {}], ["tank", 0.62, 0.52, {}],
+    ["parts", 0.95, 0.5, { rot: -90 }],
+    ["lanterns", 0.5, 0.35, {}],
+    ["streetlamp", 0.08, 0.85, {}], ["streetlamp", 0.92, 0.85, {}]
   ] }
 };
