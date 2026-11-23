@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.20.2";
+  const VERSION = "3.21.0";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -403,10 +403,58 @@
         ${tf.length ? `<div class="fest-banner">${tf.map(f => `${f.icon} 今天是〈${esc(f.name)}〉`).join("　")}${N.life ? `<small class="fest-focus">${N.life.focusHTML(c)}</small>` : ""}</div>` : `<div class="fest-banner plain">${N.life ? N.life.focusHTML(c) : "今天沒有節日"}</div>`}
         <button type="button" class="btn primary party-btn" id="partyBtn">🎉 發起聚會</button>
       </div>
+      ${radioHTML()}
       ${isPhone() ? "" : `<div class="seg view-switch" role="tablist" aria-label="小鎮顯示方式">
         <button type="button" data-view3d="1" class="${use3d() ? "on" : ""}">🧊 3D 小鎮</button>
         <button type="button" data-view3d="0" class="${use3d() ? "" : "on"}">🗺️ 街區圖</button>
       </div>`}`;
+  }
+  /* ═════════ 諾文電台：小鎮頁上的音樂播放器（歌單隨機播放、或跟著地點換曲） ═════════ */
+  function radioHTML() {
+    if (!N.lofi || !N.lofi.tracks) return "";
+    const on = N.lofi.isPlaying(), cu = N.lofi.current(), list = N.lofi.mode() === "list";
+    return `<div class="radio ${on ? "on" : ""}" id="radio">
+      <button type="button" class="radio-play" id="radioPlay" aria-label="${on ? "暫停" : "播放"}">${on ? "⏸" : "▶"}</button>
+      <button type="button" class="radio-info" id="radioList" aria-label="打開歌單">
+        <b id="radioName">${esc(cu ? cu.name : "諾文電台")}</b>
+        <small id="radioSub">${esc(on ? (cu && cu.mood ? cu.mood : "") : list ? (N.lofi.shuffle() ? "歌單・隨機播放" : "歌單・依序播放") : "跟著地點換曲")}</small>
+        <span class="radio-bar"><i id="radioProg" style="width:${Math.round(N.lofi.progress() * 100)}%"></i></span>
+      </button>
+      <button type="button" class="radio-btn ${list && N.lofi.shuffle() ? "on" : ""}" id="radioShuffle" aria-label="隨機播放" ${list ? "" : "disabled"}>🔀</button>
+      <button type="button" class="radio-btn" id="radioNext" aria-label="下一首">⏭</button>
+    </div>`;
+  }
+  function updateRadio() {
+    const r = $("#radio"); if (!r) return;
+    const tmp = document.createElement("div"); tmp.innerHTML = radioHTML(); r.replaceWith(tmp.firstElementChild);
+  }
+  function updateRadioProgress() { const p = $("#radioProg"); if (p && N.lofi) p.style.width = Math.round(N.lofi.progress() * 100) + "%"; }
+  function openMusicSheet() { sheetState = { type: "music" }; renderMusicSheet(); openSheet(); }
+  function renderMusicSheet() {
+    const L = N.lofi, list = L.mode() === "list", cu = L.current(), on = L.isPlaying();
+    const row = t => `<button type="button" class="track ${cu && cu.id === t.id && list ? "on" : ""}" data-track="${esc(t.id)}"><span class="track-ic">${cu && cu.id === t.id && list && on ? "♪" : t.song ? "🎼" : "📍"}</span><span class="track-n"><b>${esc(t.name)}</b><small>${esc(t.mood || "")}</small></span></button>`;
+    const T = L.tracks();
+    $("#sheetBody").innerHTML = `<h3>📻 諾文電台</h3>
+      <div class="seg music-mode"><button type="button" data-musicmode="list" class="${list ? "on" : ""}">🎶 歌單</button><button type="button" data-musicmode="place" class="${list ? "" : "on"}">📍 跟著地點換曲</button></div>
+      ${list ? `<div class="music-tools"><button type="button" class="btn soft sm" data-musictool="shuffle">${L.shuffle() ? "🔀 隨機播放：開" : "🔁 依序播放"}</button><button type="button" class="btn soft sm" data-musictool="next">⏭ 下一首</button><button type="button" class="btn ${on ? "soft" : "primary"} sm" data-musictool="play">${on ? "⏸ 暫停" : "▶ 播放"}</button></div>`
+        : `<p class="sheet-desc">走到哪裡就換成那裡的曲風（咖啡廳、夜市、地下湖……）。</p><div class="music-tools"><button type="button" class="btn ${on ? "soft" : "primary"} sm" data-musictool="play">${on ? "⏸ 暫停" : "▶ 播放"}</button></div>`}
+      <h4 style="margin-top:14px">🎼 諾文的歌</h4><div class="track-list">${T.filter(t => t.song).map(row).join("")}</div>
+      <h4 style="margin-top:14px">📍 地方的曲子</h4><div class="track-list">${T.filter(t => !t.song).map(row).join("")}</div>
+      <div class="sheet-actions"><button type="button" class="btn soft" data-close>關閉</button></div>`;
+  }
+  function musicClick(t) {
+    const L = N.lofi; if (!L || !L.tracks) return false;
+    if (t.id === "radioPlay") { const on = L.toggle(); store.ui.music = !!on; save(); updateMusicBtn(); updateRadio(); return true; }
+    if (t.id === "radioNext") { L.next(); if (!L.isPlaying()) { L.start(); store.ui.music = true; } save(); updateRadio(); return true; }
+    if (t.id === "radioShuffle") { L.shuffle(!L.shuffle()); updateRadio(); return true; }
+    if (t.id === "radioList") { openMusicSheet(); return true; }
+    const d = t.dataset || {};
+    if (d.track) { L.playTrack(d.track); store.ui.music = true; save(); renderMusicSheet(); updateRadio(); return true; }
+    if (d.musicmode) { L.setMode(d.musicmode); if (d.musicmode === "place") L.setTheme(musicFor(clockNow())); renderMusicSheet(); updateRadio(); return true; }
+    if (d.musictool === "shuffle") { L.shuffle(!L.shuffle()); renderMusicSheet(); return true; }
+    if (d.musictool === "next") { L.next(); if (!L.isPlaying()) { L.start(); store.ui.music = true; save(); } renderMusicSheet(); return true; }
+    if (d.musictool === "play") { const on = L.toggle(); store.ui.music = !!on; save(); updateMusicBtn(); renderMusicSheet(); updateRadio(); return true; }
+    return false;
   }
   N._state3d = c => state3d(c || clockNow());   // 除錯用
   function state3d(c) {
@@ -2564,7 +2612,7 @@
       </section>
       <section>
         <h4>音樂</h4>
-        <button type="button" class="mode-opt ${N.lofi && N.lofi.isPlaying() ? "on" : ""}" id="musicBtn2"><b>🎵 背景音樂（每個地方曲風不同）：${N.lofi && N.lofi.isPlaying() ? "開" : "關"}</b></button>
+        <button type="button" class="mode-opt ${N.lofi && N.lofi.isPlaying() ? "on" : ""}" id="musicBtn2"><b>🎵 背景音樂（小鎮頁的諾文電台可以選歌）：${N.lofi && N.lofi.isPlaying() ? "開" : "關"}</b></button>
         <div class="vol-row"><span>音量</span><input type="range" id="musicVol" min="0" max="100" value="${Math.round((store.ui.musicVol == null ? 0.5 : store.ui.musicVol) * 100)}" aria-label="音量"></div>
       </section>
       <section>
@@ -2723,7 +2771,8 @@
     if (d.rot3d) { N.town3d.rotate(+d.rot3d * Math.PI / 4); return; }
     if (t.id === "t3dLabels") { store.ui.labels3d = store.ui.labels3d === false; N.town3d.setLabels(store.ui.labels3d !== false); t.classList.toggle("on", store.ui.labels3d !== false); save(); return; }
     if (t.id === "t3dWatch") return enterWatch();
-    if (t.id === "musicBtn") { const on = N.lofi.toggle(); store.ui.music = !!on; save(); updateMusicBtn(); return toast(on ? "🎵 lofi 播放中" : "音樂已關閉"); }
+    if (t.id === "musicBtn") { const on = N.lofi.toggle(); store.ui.music = !!on; save(); updateMusicBtn(); updateRadio(); const cu = N.lofi.current && N.lofi.current(); return toast(on ? "🎵 " + (cu ? cu.name : "lofi 播放中") : "音樂已關閉"); }
+    if (t.closest && (t.id === "radioPlay" || t.id === "radioNext" || t.id === "radioShuffle" || t.id === "radioList" || t.dataset.track || t.dataset.musicmode || t.dataset.musictool) && musicClick(t)) return;
     if (t.id === "t3dFollow") { const id = slot().observing || card3d; if (id) { N.town3d.focus(id, true); toast("鏡頭跟著" + id); } else toast("先點一位居民，或開始觀察某人"); return; }
     if (d.follow3d) { N.town3d.focus(d.follow3d, true); return; }
     if (d.cardloc) { hideCard3d(); return openLocation(d.cardloc); }
@@ -2932,7 +2981,14 @@
     save(true);
     const s = slot();
     if (s.observing && !s.encounter && s.nextRollAt < Date.now()) s.nextRollAt = Date.now() + waitMs(true);
-    if (N.lofi) N.lofi.setVolume(store.ui.musicVol == null ? 0.5 : store.ui.musicVol);
+    if (N.lofi) {
+      N.lofi.setVolume(store.ui.musicVol == null ? 0.5 : store.ui.musicVol);
+      if (N.lofi.restore) {
+        N.lofi.restore(store.ui.musicMode || "list", store.ui.track, store.ui.shuffle !== false);
+        N.lofi.onChange(() => { const cu = N.lofi.current(); store.ui.musicMode = N.lofi.mode(); store.ui.shuffle = N.lofi.shuffle(); if (cu && N.lofi.mode() === "list") store.ui.track = cu.id; save(); updateMusicBtn(); updateRadio(); if (sheetState && sheetState.type === "music") renderMusicSheet(); });
+        setInterval(updateRadioProgress, 1000);
+      }
+    }
     if (N.splash) N.splash.progress(0.06, "讀取居民的行程……");
     applyTheme(clockNow());
     render();
