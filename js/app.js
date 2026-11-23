@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.21.0";
+  const VERSION = "3.22.0";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -881,7 +881,7 @@
     const s = slot(), enc = s.encounter; if (!enc || enc.done) return;
     const ev = encEvent(enc); if (!ev) return;
     if (enc.step < ev.lines.length - 1) {
-      enc.step++; save(true);
+      enc.step++; save(true); sfx("pop");
       const t = $("#transcript");
       if (t) {
         t.querySelectorAll(".line.cur").forEach(n => { n.classList.remove("cur"); n.classList.add("old"); });
@@ -900,6 +900,7 @@
     if (enc.party) finishParty(enc);
     else if (enc.delta) {
       const res = applyDelta(enc.delta); enc.result = { pts: res.r.pts, status: res.r.status, note: res.note };
+      if (enc.delta.amt > 0) sfx(/^(date|confess|sweet|datespot|hand|lean|hug|feed|anniv|festdate)$/.test(enc.delta.action) ? "heart" : "gain");
       if (enc.outing) pushNews({ kind: "outing", text: `🧺 ${enc.title}。`, cast: enc.cast.slice(), loc: enc.loc });
       if (enc.delta.action === "confess" && enc.delta.ok) pushNews({ kind: "love", text: `💗 ${enc.delta.a}和${enc.delta.b}開始交往了。`, cast: enc.cast.slice(), loc: enc.loc });
     }
@@ -1228,7 +1229,7 @@
   };
   // 進出房子的載入畫面：淡入、角色頭像、地點名稱、轉圈；房間或小鎮準備好之後淡出
   function ctlFade(loc, then) {
-    const f = $("#ctl .ctl-fade"); if (!f) return then();
+    const f = $("#ctl .ctl-fade"); sfx("door"); if (!f) return then();
     const L = N.locations.find(l => l.id === loc), going = ctl.mode === "town" && !(N.interiors && N.interiors[loc] && N.interiors[loc].outdoor && !N.interiors[loc].dark);
     f.innerHTML = `<div class="ctl-load">${person(ctl.id, 56)}<p class="ctl-load-to">${going ? "走進" : "前往"}</p><h3>${L && L.icon ? L.icon + " " : ""}${esc(locName(loc))}</h3><div class="ctl-load-spin"></div></div>`;
     f.hidden = false; f.classList.remove("out");
@@ -1312,7 +1313,7 @@
   // 圓環選單：中間是對象，選項排成一圈
   function ctlRing(x, y, center, opts) {
     const el = $("#ctl .ctl-ring"); if (!el) return;
-    ctl.ringOpts = opts;
+    ctl.ringOpts = opts; sfx("ring");
     const n = opts.length, R = n > 8 ? 112 : n > 5 ? 92 : 78;
     const W = window.innerWidth, H = window.innerHeight;
     x = Math.max(R + 40, Math.min(W - R - 40, x)); y = Math.max(R + 70, Math.min(H - R - 50, y));
@@ -1397,7 +1398,7 @@
   function ctlTalkNext() {
     const s = slot(), enc = s.encounter; if (!enc) return ctlTalk();
     if (enc.done) { const aa = enc.afterAct; continueObserve(); ctlSetAct(aa || "在附近走動"); ctlHud(); return ctlTalk(); }
-    nextLine(); ctlTalk();
+    sfx("pop"); nextLine(); ctlTalk();
   }
   // 出門：選要去哪裡
   function ctlOut() {
@@ -2044,17 +2045,17 @@
   function eatLines(a, it) { return [["＊", fillT(it.eat, a)], [a, quipOf(a)]]; }
   function shopClick(d) {
     const a = ctl.id, w = wal(a), sh = shopAt(ctl.loc), M = MONEY().name;
-    if (d.shopbuy) { const it = N.items[d.shopbuy]; if (w.money < it.price) return; w.money -= it.price; bagAdd(w, d.shopbuy, 1); save(true); return ctlShop(`買了${it.icon}${it.name}，放進背包了。`); }
+    if (d.shopbuy) { const it = N.items[d.shopbuy]; if (w.money < it.price) return; w.money -= it.price; bagAdd(w, d.shopbuy, 1); save(true); sfx("coin"); return ctlShop(`買了${it.icon}${it.name}，放進背包了。`); }
     if (d.shopeat) {
-      const it = N.items[d.shopeat]; if (w.money < it.price) return; w.money -= it.price; save(true);
+      const it = N.items[d.shopeat]; if (w.money < it.price) return; w.money -= it.price; save(true); sfx("coin"); setTimeout(() => sfx("eat"), 380);
       return startGen(`${a}在${sh.title}吃${it.name}`, eatLines(a, it), [a], ctl.loc, null, `在${sh.title}吃${it.name}`);
     }
-    if (d.bageat) { const it = N.items[d.bageat]; bagAdd(w, d.bageat, -1); save(true); return startGen(`${a}吃了${it.name}`, eatLines(a, it), [a], ctl.loc, null, `吃${it.name}`); }
+    if (d.bageat) { const it = N.items[d.bageat]; bagAdd(w, d.bageat, -1); save(true); sfx("eat"); return startGen(`${a}吃了${it.name}`, eatLines(a, it), [a], ctl.loc, null, `吃${it.name}`); }
     if (d.baggive) { if (ctl.giveTo) return giveGift(a, ctl.giveTo, d.baggive); ctl.giveItem = d.baggive; return ctlBag(null); }
     if (d.giveto) { const k = ctl.giveItem; ctl.giveItem = null; return giveGift(a, d.giveto, k); }
     if (d.datespot) return doDateSpot(a, ctl.dateWith, d.datespot);
     if (d.shopact === "show" || d.shopact === "perform") {
-      const sw = sh[d.shopact]; if (w.money < sw.price) return; w.money -= sw.price; save(true);
+      const sw = sh[d.shopact]; if (w.money < sw.price) return; w.money -= sw.price; save(true); sfx("ticket");
       const L = sw.lines.map(t => ["＊", fillT(t, a)]); L.push([a, quipOf(a)]);
       return startGen(`${a}去看了〈${sw.title}〉`, L, [a], ctl.loc, null, `在${sh.title}看〈${sw.title}〉`);
     }
@@ -2064,7 +2065,7 @@
     }
     if (d.shopact === "work") {
       const wk = sh.work, day = dayKeyOf(clockNow()); if (w.work[ctl.loc] === day) return;
-      w.work[ctl.loc] = day; w.money += wk.pay; save(true);
+      w.work[ctl.loc] = day; w.money += wk.pay; save(true); sfx("cash");
       return startGen(`${a}${wk.act.replace(/^在/, "在")}`, [["＊", `${a}捲起袖子，${wk.label}。一開始手忙腳亂，後來慢慢抓到了節奏。`],
         ["＊", `忙完的時候已經過了一個小時。老闆把${wk.pay} ${M}塞進${a}手裡：「辛苦了，明天也可以再來喔。」`], [a, quipOf(a)]], [a], ctl.loc, null, wk.act);
     }
@@ -2088,7 +2089,7 @@
   }
   function giveGift(a, b, k) {
     const w = wal(a), it = N.items[k]; if (!it || !w.bag[k]) return;
-    bagAdd(w, k, -1); ctl.giveTo = null;
+    bagAdd(w, k, -1); ctl.giveTo = null; sfx("gift");
     const tier = prefTier(b, k), L = [];
     CT().ctlApproach && CT().ctlApproach(b);
     genSay(L, a, b, pk(GIVE_OPEN), a, b);
@@ -2545,8 +2546,9 @@
   }
 
   /* ═════════ 抽屜／設定 ═════════ */
-  function openSheet() { $("#sheet").hidden = false; $("#sheetBackdrop").hidden = false; $("#sheet").scrollTop = 0; }
-  function closeSheet() { $("#sheet").classList.remove("phone-mode"); $("#sheet").hidden = true; $("#sheetBackdrop").hidden = true; sheetState = null; }
+  const sfx = n => { if (N.sfx) N.sfx.play(n); };
+  function openSheet() { if ($("#sheet").hidden) sfx("open"); $("#sheet").hidden = false; $("#sheetBackdrop").hidden = false; $("#sheet").scrollTop = 0; }
+  function closeSheet() { if (!$("#sheet").hidden) sfx("close"); $("#sheet").classList.remove("phone-mode"); $("#sheet").hidden = true; $("#sheetBackdrop").hidden = true; sheetState = null; }
   function confirmSheet(title, msg, okLabel, onOk) {
     sheetState = { type: "confirm", onOk };
     $("#sheetBody").innerHTML = `<h3>${esc(title)}</h3><p class="sheet-desc">${esc(msg)}</p>
@@ -2614,6 +2616,8 @@
         <h4>音樂</h4>
         <button type="button" class="mode-opt ${N.lofi && N.lofi.isPlaying() ? "on" : ""}" id="musicBtn2"><b>🎵 背景音樂（小鎮頁的諾文電台可以選歌）：${N.lofi && N.lofi.isPlaying() ? "開" : "關"}</b></button>
         <div class="vol-row"><span>音量</span><input type="range" id="musicVol" min="0" max="100" value="${Math.round((store.ui.musicVol == null ? 0.5 : store.ui.musicVol) * 100)}" aria-label="音量"></div>
+        <button type="button" class="mode-opt ${store.ui.sfx !== false ? "on" : ""}" id="sfxBtn" style="margin-top:10px"><b>🔔 按鈕和互動音效：${store.ui.sfx !== false ? "開" : "關"}</b></button>
+        <div class="vol-row"><span>音效音量</span><input type="range" id="sfxVol" min="0" max="100" value="${Math.round((store.ui.sfxVol == null ? 0.6 : store.ui.sfxVol) * 100)}" aria-label="音效音量"></div>
       </section>
       <section>
         <h4>加入 iPhone 主畫面</h4>
@@ -2705,6 +2709,7 @@
     if (watching && ev.target.closest("#watchLayer")) return exitWatch();
     const t = ev.target.closest("button, [data-close]");
     if (!t) { if (ev.target.id === "sheetBackdrop") closeSheet(); return; }
+    if (t.tagName === "BUTTON" && !t.disabled && N.sfx) N.sfx.play("tap");
     const d = t.dataset;
     if (d.nav) return nav(d.nav);
     if (d.region) { store.ui.region = d.region; save(); return render(); }
@@ -2835,11 +2840,13 @@
     if (d.theme) { store.ui.theme = d.theme; save(true); applyTheme(); return renderSettings(); }
     if (d.quality) { try { localStorage.setItem("novum-quality", d.quality); } catch (e) { } save(true); return location.reload(); }
     if (t.id === "needsToggle") { store.needs = store.needs === false; save(true); render(); return renderSettings(); }
+    if (t.id === "sfxBtn") { store.ui.sfx = store.ui.sfx === false; if (N.sfx) { N.sfx.setOn(store.ui.sfx); sfx("toggle"); } save(); return renderSettings(); }
     if (t.id === "musicBtn2") { const on = N.lofi.toggle(); store.ui.music = !!on; save(); updateMusicBtn(); return renderSettings(); }
     if (t.id === "bondToggle") { store.bond = store.bond === false; save(true); return renderSettings(); }
     if (t.id === "backSettings") { sheetState = { type: "settings" }; renderSettings(); $("#sheet").scrollTop = 0; return; }
   });
   document.addEventListener("input", ev => {
+    if (ev.target.id === "sfxVol") { const v = ev.target.value / 100; store.ui.sfxVol = v; if (N.sfx) { N.sfx.setVolume(v); sfx("tap"); } save(); return; }
     if (ev.target.id === "musicVol") { const v = ev.target.value / 100; store.ui.musicVol = v; N.lofi.setVolume(v); save(); return; }
     if (ev.target.id === "logSearch") {
       logFilter.q = ev.target.value; logFilter.limit = 40;
@@ -2981,6 +2988,7 @@
     save(true);
     const s = slot();
     if (s.observing && !s.encounter && s.nextRollAt < Date.now()) s.nextRollAt = Date.now() + waitMs(true);
+    if (N.sfx) { N.sfx.setOn(store.ui.sfx !== false); N.sfx.setVolume(store.ui.sfxVol == null ? 0.6 : store.ui.sfxVol); }
     if (N.lofi) {
       N.lofi.setVolume(store.ui.musicVol == null ? 0.5 : store.ui.musicVol);
       if (N.lofi.restore) {
