@@ -1587,7 +1587,7 @@
     vintage(GRID.plaza.x - 1.8, GRID.plaza.z + 14, 0); vintage(GRID.colX[1] - 1.6, GRID.rowZ[-1] + 8, Math.PI);
     const rift = (x, z) => { const g = G(x, z); box(g, 0.14, 4, 0.14, M(0x6A5A4A), 0, SH, 0); box(g, 1.0, 0.08, 0.08, M(0x6A5A4A), 0, SH + 3.7, 0);
       for (let i = 0; i < 5; i++) { const c = new T.Mesh(new T.OctahedronGeometry(0.1 + (i % 2) * 0.06, 0), glowM(i % 2 ? 0xC8A8FF : 0x8AE8FF)); c.position.set(Math.sin(i * 2) * 0.2, SH + 1.6 + i * 0.35, Math.cos(i * 2) * 0.2); c.userData.rift = i; g.add(c); riftBits.push(c); } };
-    rift(GRID.plaza.x - 2.6, GRID.plaza.z - 2.6); rift(GRID.colX[1] + 15.2, GRID.rowZ[1] + 22);
+    rift(GRID.colX[1] + 15.2, GRID.rowZ[1] + 22);   // 廣場西北角路口那一個拿掉了（站在馬路中間）
     // 舊城：蒸汽管線、齒輪掛在牆上
     if (LEGACY) for (const id of ["諾文舊街", "諾文古籍巷", "諾文舊物市場", "諾文服飾街"]) at(id, g => { KIT.pipe(g, 1.9, 0.12, -1.6, 2.6); KIT.gears(g, -1.6, 2.4, 1.15); });
     // 外城：銅色管線、煙囪、平交道
@@ -1606,14 +1606,10 @@
     for (const x of AX) for (let z = GRID.minZ; z < GRID.maxZ; z += 1.6) if (!AZ.some(v => Math.abs(z - v) < AH + 0.7) && GRID.onRoad(x, z)) { const m = new T.Mesh(new T.BoxGeometry(0.1, 0.02, 0.6), dash); m.position.set(x, 0.035, z); R0.add(m); }
     for (const z of AZ) for (let x = GRID.minX; x < GRID.maxX; x += 1.6) if (!AX.some(v => Math.abs(x - v) < AH + 0.7) && GRID.onRoad(x, z)) { const m = new T.Mesh(new T.BoxGeometry(0.6, 0.02, 0.1), dash); m.position.set(x, 0.035, z); R0.add(m); }
     for (const x of AX) for (const z of AZ) {
-      for (let i = -5; i <= 5; i++) for (const zz of [z + AH - 0.2, z - AH + 0.2]) { const a = new T.Mesh(new T.BoxGeometry(0.3, 0.02, 1.2), dash); a.position.set(x + i * 0.5, 0.04, zz); R0.add(a); }
-      for (let i = -5; i <= 5; i++) for (const xx of [x - AH + 0.2, x + AH - 0.2]) { const a = new T.Mesh(new T.BoxGeometry(1.2, 0.02, 0.3), dash); a.position.set(xx, 0.04, z + i * 0.5); R0.add(a); }
-      for (const [dx, dz, ry] of [[AH - 1.3, AH - 1.3, 0], [-AH + 1.3, -AH + 1.3, Math.PI]]) {
-        const g = G(x + dx, z + dz, ry);
-        box(g, 0.1, 2.3, 0.1, M(0x2E3238), 0, SH, 0); box(g, 0.32, 0.85, 0.26, M(0x22252C), 0, SH + 2.2, 0.08);
-        const ls = [0xFF4A3A, 0xFFC23A, 0x4AE07A].map((c, i) => { const m = new T.MeshBasicMaterial({ color: 0x333333 }); const o = new T.Mesh(new T.BoxGeometry(0.18, 0.18, 0.05), m); o.position.set(0, SH + 2.88 - i * 0.24, 0.22); g.add(o); return { m, c }; });
-        traffic.push({ ls, phase: ry ? 0 : 1 });
-      }
+      // 斑馬線橫跨整條大道（從這邊的路緣到對面的路緣），才會跟廣場、對面的人行道接在一起；廣場這一圈不放紅綠燈
+      const nS = Math.floor((AH - 0.45) / 0.5);
+      for (let i = -nS; i <= nS; i++) for (const zz of [z + AH - 0.2, z - AH + 0.2]) { const a = new T.Mesh(new T.BoxGeometry(0.3, 0.02, 1.2), dash); a.position.set(x + i * 0.5, 0.04, zz); R0.add(a); }
+      for (let i = -nS; i <= nS; i++) for (const xx of [x - AH + 0.2, x + AH - 0.2]) { const a = new T.Mesh(new T.BoxGeometry(1.2, 0.02, 0.3), dash); a.position.set(xx, 0.04, z + i * 0.5); R0.add(a); }
     }
     // 大道邊停的車、廣場南邊的公車站
     const CAR = [0xD8705A, 0x6A9AC8, 0xF2EEE2, 0x8AB880, 0xE8C060, 0xB88AC8];
@@ -4359,7 +4355,7 @@
     return null;
   };
 
-  N.town3d_debug = () => ({ wPath, routeTo, cars, roadNet: () => roadNet, groundAt, COAST, walkGrid, alleyOf, ENTR, camera, FP, GRID, cam, TC, WG, walkers, lots, RM, occAt, cellOf, roomPath, buildRoom });
+  N.town3d_debug = () => ({ scene, wPath, routeTo, cars, roadNet: () => roadNet, groundAt, COAST, walkGrid, alleyOf, ENTR, camera, FP, GRID, cam, TC, WG, walkers, lots, RM, occAt, cellOf, roomPath, buildRoom });
   N.town3d = { rotate: a => { cam.fly = null; const a0 = cam.az, t0 = performance.now(); const step = () => { const k = Math.min(1, (performance.now() - t0) / 350); cam.az = a0 + a * (1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); }; step(); }, setAnomaly, supported, mount, unmount, update, say, focus, flyRegion, flyLoc, setLabels, setXray, setDirector, home, pause,
     isFollowing: () => cam.follow, isReady: () => built, ctl: tCtl };
 })();
