@@ -1989,19 +1989,42 @@
     const sea = new T.Mesh(new T.ShapeGeometry(seaSh), seaM); sea.rotation.x = -Math.PI / 2; sea.position.y = -0.42; sea.userData.noVox = true; sea.receiveShadow = true; root.add(sea); COAST.sea = sea;
     const bed = new T.Mesh(new T.PlaneGeometry(1800, 1800), new T.MeshBasicMaterial({ color: 0x173A4A })); bed.rotation.x = -Math.PI / 2; bed.position.set(0, -1.6, 0); bed.userData.noVox = true; root.add(bed);
     const land = new T.Mesh(new T.ShapeGeometry(landSh), mat(0x86A462)); land.rotation.x = -Math.PI / 2; land.receiveShadow = true; land.userData.noVox = true; root.add(land);
-    // ── 馬路：每個街區往外 3.6，疊起來就是整片路網，外緣跟著城的形狀 ──
-    const RE = GRID.ROADE;
-    for (const c of GRID.cells) { const x0 = c.x - RE, x1 = c.x + GRID.BW + RE, z0 = c.z - RE, z1 = c.z + GRID.BD + RE; Bg.quad([x0, z1], [x1, z1], [x1, z0], [x0, z0], 0.02, 0x8A8C92); }
-    if (BASIN) { const c = BASIN.cell; Bg.quad([c.x + 11, c.z + GRID.BD + RE], [c.x + GRID.BW + RE, c.z + GRID.BD + RE], [c.x + GRID.BW + RE, c.z - RE], [c.x + 11, c.z - RE], 0.02, 0x8A8C92); }
-    // 路的外緣：沒有隔壁街區的那一邊，鋪一條石頭路緣（馬路→路緣→草地，不會直接斷掉）
-    { const has = new Set(GRID.cells.map(c => c.i + "," + c.j)); if (BASIN) has.add(BASIN.cell.i + "," + BASIN.cell.j);
-      const E = GRID.ROADE, W2 = GRID.BW, D2 = GRID.BD;
-      for (const c of GRID.cells.concat(BASIN ? [BASIN.cell] : [])) {
-        const x0 = c.x - E, x1 = c.x + W2 + E, z0 = c.z - E, z1 = c.z + D2 + E;
-        if (!has.has((c.i - 1) + "," + c.j)) B.box(0.3, 0.12, z1 - z0, x0 + 0.15, 0.0, (z0 + z1) / 2, 0, 0xB8AC98, true);
-        if (!has.has((c.i + 1) + "," + c.j)) B.box(0.3, 0.12, z1 - z0, x1 - 0.15, 0.0, (z0 + z1) / 2, 0, 0xB8AC98, true);
-        if (!has.has(c.i + "," + (c.j - 1))) B.box(x1 - x0, 0.12, 0.3, (x0 + x1) / 2, 0.0, z0 + 0.15, 0, 0xB8AC98, true);
-        if (!has.has(c.i + "," + (c.j + 1))) B.box(x1 - x0, 0.12, 0.3, (x0 + x1) / 2, 0.0, z1 - 0.15, 0, 0xB8AC98, true);
+    // ── 馬路：每個街區往外 ROADE 的長方形聯集起來就是整片路網 ──
+    // 先把所有長方形的邊切成格子（座標壓縮），算出哪些格子是路，再一列一列合併成不重疊的路面；
+    // 路的外緣（格子旁邊不是路）才鋪石頭路緣，所以不會有路緣跑到別條路中間、也不會有路面疊在一起。
+    { const RE = GRID.ROADE, rects = GRID.cells.map(c => [c.x - RE, c.x + GRID.BW + RE, c.z - RE, c.z + GRID.BD + RE]);
+      if (BASIN) { const c = BASIN.cell; rects.push([c.x + 11, c.x + GRID.BW + RE, c.z - RE, c.z + GRID.BD + RE]); }
+      const uniq = a => [...new Set(a.map(v => Math.round(v * 1000) / 1000))].sort((p, q) => p - q);
+      const xs = uniq(rects.flatMap(r => [r[0], r[1]])), zs = uniq(rects.flatMap(r => [r[2], r[3]]));
+      const NX = xs.length - 1, NZ = zs.length - 1, cov = new Uint8Array(NX * NZ);
+      for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) {
+        const mx = (xs[i] + xs[i + 1]) / 2, mz = (zs[j] + zs[j + 1]) / 2;
+        if (rects.some(r => mx > r[0] && mx < r[1] && mz > r[2] && mz < r[3])) cov[j * NX + i] = 1;
+      }
+      const at = (i, j) => i >= 0 && j >= 0 && i < NX && j < NZ && cov[j * NX + i];
+      for (let j = 0; j < NZ; j++) for (let i = 0; i < NX;) {
+        if (!at(i, j)) { i++; continue; }
+        let k = i; while (at(k + 1, j)) k++;
+        Bg.quad([xs[i], zs[j + 1]], [xs[k + 1], zs[j + 1]], [xs[k + 1], zs[j]], [xs[i], zs[j]], 0.02, 0x8A8C92);
+        i = k + 1;
+      }
+      // 路緣：沿著路網外緣，同一條線上相連的段合併成一條
+      const runs = new Map(), push = (key, a0, a1) => { let L = runs.get(key); if (!L) runs.set(key, L = []); L.push([a0, a1]); };
+      for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) {
+        if (!at(i, j)) continue;
+        if (!at(i - 1, j)) push("x|" + xs[i] + "|1", zs[j], zs[j + 1]);
+        if (!at(i + 1, j)) push("x|" + xs[i + 1] + "|-1", zs[j], zs[j + 1]);
+        if (!at(i, j - 1)) push("z|" + zs[j] + "|1", xs[i], xs[i + 1]);
+        if (!at(i, j + 1)) push("z|" + zs[j + 1] + "|-1", xs[i], xs[i + 1]);
+      }
+      for (const [key, L] of runs) {
+        const [ax, v, sg] = key.split("|"), c = +v, inw = +sg * 0.15;
+        L.sort((p, q) => p[0] - q[0]);
+        const merged = []; for (const seg of L) { const m = merged[merged.length - 1]; if (m && seg[0] <= m[1] + 1e-3) m[1] = Math.max(m[1], seg[1]); else merged.push(seg.slice()); }
+        for (const [a0, a1] of merged) {
+          if (ax === "x") B.box(0.3, 0.12, a1 - a0, c + inw, 0.0, (a0 + a1) / 2, 0, 0xB8AC98, true);
+          else B.box(a1 - a0, 0.12, 0.3, (a0 + a1) / 2, 0.0, c + inw, 0, 0xB8AC98, true);
+        }
       } }
     // ── 岸線重新取樣成短段 ──
     const segs = [];
