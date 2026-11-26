@@ -260,6 +260,23 @@ h2.view-title { font-family: var(--font-serif); font-size: 22px; margin: 4px 2px
 .mode-opt span { font-size: 14px; color: var(--ink2); }
 .mode-opt.on { border-color: var(--brass); background: var(--brass-soft); }
 .mode-opt + .mode-opt { margin-top: 8px; }
+/* 開關：右邊的小膠囊直接顯示開／關 */
+.mode-opt.tog { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; min-height: 56px; }
+.mode-opt.tog b, .mode-opt.tog span { grid-column: 1; }
+.mode-opt.tog .sw { grid-column: 2; grid-row: 1 / span 2; position: relative; width: 58px; height: 30px; border-radius: 999px; background: var(--bg2); border: 1px solid var(--line); color: var(--ink2); font-style: normal; font-size: 12px; font-weight: 800; line-height: 28px; text-align: right; padding-right: 9px; box-sizing: border-box; }
+.mode-opt.tog .sw::before { content: ""; position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .15s; }
+.mode-opt.tog.on .sw { background: var(--brass); border-color: var(--brass); color: #fff; text-align: left; padding: 0 0 0 10px; }
+.mode-opt.tog.on .sw::before { left: 31px; }
+@media (prefers-reduced-motion: reduce) { .mode-opt.tog .sw::before { transition: none; } }
+/* 設定裡收起來的區塊 */
+.sheet .set-more { margin-top: 20px; border: 1px solid var(--line); border-radius: 14px; padding: 0 14px; }
+.sheet .set-more > summary { min-height: 48px; display: flex; align-items: center; font-size: 15px; font-weight: 700; color: var(--ink2); cursor: pointer; list-style: none; }
+.sheet .set-more > summary::-webkit-details-marker { display: none; }
+.sheet .set-more > summary::after { content: "▾"; margin-left: auto; transition: transform .15s; }
+.sheet .set-more[open] > summary::after { transform: rotate(180deg); }
+.sheet .set-more[open] { padding-bottom: 14px; }
+.sheet .set-more > section:first-of-type { margin-top: 4px; }
+.sheet .set-more + section, .sheet section + .set-more { margin-top: 20px; }
 textarea.import { width: 100%; min-height: 120px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 10px; font: 14px/1.5 ui-monospace, Menlo, monospace; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 15px; }
 .kv dt { font-weight: 700; }
@@ -428,6 +445,7 @@ textarea.import { width: 100%; min-height: 120px; border-radius: 12px; border: 1
 .photo { display: inline-block; padding: 18px 14px; border-radius: 10px; background: #1B1E26; color: #A3A6B5; font-size: 14px; }
 .sheet.phone-mode .btn.soft { background: #262A36; color: #ECE9F2; border-color: transparent; }
 .obs-tools .span2 { grid-column: 1 / -1; }
+.obs-why { margin: -2px 2px 0; font-size: 13px; line-height: 1.5; color: var(--ink2); text-align: center; }
 .rel-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
 .rel-row { padding: 10px 12px; border-radius: 14px; background: var(--bg2); }
 .rel-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 17px; }
@@ -486,6 +504,9 @@ html.dark .tl-sum.love { background: #3A2430; }
 .town-top { display: flex; gap: 8px; align-items: stretch; margin-bottom: 10px; }
 .fest-banner { flex: 1; display: flex; align-items: center; padding: 8px 12px; border-radius: 14px; background: var(--brass-soft); color: var(--brass); font-weight: 800; font-size: 15px; line-height: 1.4; }
 .fest-banner.plain { background: var(--bg2); color: var(--ink2); font-weight: 600; }
+.fest-banner:not(.plain) { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; }
+.fest-name { display: block; }
+.fest-name .nw { white-space: nowrap; }
 .party-btn { flex: none; min-height: 52px; border-radius: 14px; }
 .fest-list { display: grid; gap: 8px; margin-bottom: 8px; }
 .fest-row { width: 100%; display: grid; grid-template-columns: 44px 1fr; gap: 10px; text-align: left; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
@@ -761,9 +782,14 @@ body.ctl-on .toast { z-index: 9600; }
 .ctl-stage .room-canvas { display: block; position: absolute; left: 0; top: 0; }
 .ctl-stage .room-edit-btn { display: none; }
 .ctl-stage .empty { padding: 40px 20px; text-align: center; opacity: .7; }
-.ctl-hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 12px); font-size: 12px; opacity: .55; pointer-events: none; white-space: nowrap; }
-.ctl-joy { position: absolute; left: 22px; bottom: calc(env(safe-area-inset-bottom) + 36px); width: 116px; height: 116px; border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.16); touch-action: none; }
-.ctl-joy i { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%; background: rgba(244,238,228,.55); }
+/* 房間背景可能是米白色：提示、搖桿、樓層分頁都自帶深色底，才不會白字疊白底 */
+.ctl-hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 10px); width: max-content; max-width: calc(100% - 24px); box-sizing: border-box; padding: 5px 12px; border-radius: 999px; background: rgba(22,20,28,.72); color: #F4EEE4; font-size: 12px; line-height: 1.45; text-align: center; pointer-events: none; }
+.ctl-joy { position: absolute; left: 22px; bottom: calc(env(safe-area-inset-bottom) + 52px); width: 116px; height: 116px; border-radius: 50%; background: rgba(22,20,28,.28); border: 2px solid rgba(22,20,28,.38); box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); touch-action: none; }
+.ctl-joy i { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%; background: rgba(244,238,228,.9); box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.ctl .room-floors { background: rgba(22,20,28,.72); }
+.ctl .room-floors button { min-height: 36px; color: #F4EEE4; background: transparent; }
+.ctl .room-floors button:hover { background: rgba(255,255,255,.14); }
+.ctl .room-floors button.on { background: #F4EEE4; color: #24212B; }
 @media (pointer: fine) { .ctl-joy { display: none; } }
 /* 圓環選單 */
 .ctl-ring { position: absolute; inset: 0; z-index: 5; background: rgba(10,8,14,.25); }

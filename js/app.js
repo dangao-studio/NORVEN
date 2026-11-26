@@ -402,7 +402,7 @@
   function townTopHTML(c) {
     const tf = todayFests(c);
     return `<div class="town-top">
-        ${tf.length ? `<div class="fest-banner">${tf.map(f => `${f.icon} 今天是〈${esc(f.name)}〉`).join("　")}${N.life ? `<small class="fest-focus">${N.life.focusHTML(c)}</small>` : ""}</div>` : `<div class="fest-banner plain">${N.life ? N.life.focusHTML(c) : "今天沒有節日"}</div>`}
+        ${tf.length ? `<div class="fest-banner">${tf.map(f => `<span class="fest-name">${f.icon} 今天是<span class="nw">〈${esc(f.name)}〉</span></span>`).join("")}${N.life ? `<small class="fest-focus">${N.life.focusHTML(c)}</small>` : ""}</div>` : `<div class="fest-banner plain">${N.life ? N.life.focusHTML(c) : "今天沒有節日"}</div>`}
         <button type="button" class="btn primary party-btn" id="partyBtn">🎉 發起聚會</button>
       </div>
       ${radioHTML()}
@@ -814,8 +814,9 @@
           <button type="button" class="btn soft" id="assignBtn" ${busy ? "disabled" : ""}>🧭 指派去…</button>
           <button type="button" class="btn soft" id="interactBtn" ${busy ? "disabled" : ""}>💬 找人互動</button>
           <button type="button" class="btn soft" id="phoneBtn">📱 偷看手機</button>
-          <button type="button" class="btn primary span2" id="ctlBtn" ${busy || !w.avail ? "disabled" : ""}>🎮 操控${esc(x.id)}</button>
           <button type="button" class="btn soft" id="relBtn">💗 關係</button>
+          <button type="button" class="btn ${busy || !w.avail ? "soft" : "primary"} span2" id="ctlBtn" ${busy || !w.avail ? `disabled aria-describedby="ctlWhy"` : ""}>🎮 操控${esc(x.id)}</button>
+          ${busy || !w.avail ? `<p class="obs-why span2" id="ctlWhy">${busy ? "正在和人說話，說完才能操控。" : `${esc(x.id)}現在${esc(w.act || "在休息")}，等有空的時候才能操控。`}</p>` : ""}
           <button type="button" class="btn soft span2" id="profileBtn" aria-expanded="${profileOpen}">📇 ${profileOpen ? "收起資料" : "角色資料"}</button>
         </div>
         ${profileOpen ? `<div class="profile"><p><b>個性</b>　${esc(x.traits)}</p><p><b>關係</b>　${esc(x.relations)}</p></div>` : ""}
@@ -1266,7 +1267,7 @@
     } else {
       if (x) x.remove(); clearInterval(ctl.aimT);
       const hint = $("#ctl .ctl-hint"); if (hint && ctl.mode === "town") hint.textContent = `點地面走過去・點長椅或別人會出現選單・點房子會走進去・WASD／方向鍵直接走・V 第一人稱`;
-      else if (hint) hint.textContent = `點地板走過去・點家具或別人會出現選單・${matchMedia("(pointer:fine)").matches ? "WASD／方向鍵直接走" : "左下搖桿直接走"}・V 第一人稱`;
+      else if (hint) hint.textContent = `點地板走過去・點家具或別人會出現選單・${matchMedia("(pointer:fine)").matches ? "WASD／方向鍵直接走・V 第一人稱" : "左下搖桿直接走・右上 👁 第一人稱"}`;
     }
   }
   // 戶外：直接在 3D 小鎮上走（opt.at：從哪個門口出來）
@@ -2595,6 +2596,9 @@
     renderSettings();
     openSheet();
   }
+  // 設定裡收起來的區塊：重畫時維持打開／收起
+  const setOpen = {};
+  const swHTML = on => `<i class="sw" aria-hidden="true">${on ? "開" : "關"}</i>`;
   function renderSettings() {
     const p = store.preview, c = clockNow();
     const standalone = window.navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
@@ -2616,6 +2620,39 @@
           <button type="button" class="chip" data-pshift="15">+15 分</button><button type="button" class="chip" data-pshift="60">+1 小時</button></div>
         <div class="chip-row" style="justify-content:center;margin-top:8px">${["07:30", "12:00", "15:30", "17:45", "20:30", "23:45"].map(t => `<button type="button" class="chip" data-pset="${t}">${t}</button>`).join("")}</div>
       </section>
+      ` : ""}
+      <section>
+        <h4>音樂</h4>
+        <button type="button" class="mode-opt tog ${N.lofi && N.lofi.isPlaying() ? "on" : ""}" id="musicBtn2" aria-pressed="${!!(N.lofi && N.lofi.isPlaying())}"><b>🎵 背景音樂</b><span>小鎮頁的諾文電台可以選歌。</span>${swHTML(N.lofi && N.lofi.isPlaying())}</button>
+        <div class="vol-row"><span>音量</span><input type="range" id="musicVol" min="0" max="100" value="${Math.round((store.ui.musicVol == null ? 0.5 : store.ui.musicVol) * 100)}" aria-label="音量"></div>
+        <button type="button" class="mode-opt tog ${store.ui.sfx !== false ? "on" : ""}" id="sfxBtn" style="margin-top:10px" aria-pressed="${store.ui.sfx !== false}"><b>🔔 按鈕和互動音效</b>${swHTML(store.ui.sfx !== false)}</button>
+        <div class="vol-row"><span>音效音量</span><input type="range" id="sfxVol" min="0" max="100" value="${Math.round((store.ui.sfxVol == null ? 0.6 : store.ui.sfxVol) * 100)}" aria-label="音效音量"></div>
+      </section>
+      <section>
+        <h4>介面顏色</h4>
+        <div class="seg seg-grid">${[["town", "🕰️ 跟著小鎮時間"], ["system", "📱 跟著手機"], ["light", "☀️ 白天"], ["dark", "🌙 夜晚"]].map(([v, t]) => `<button type="button" data-theme="${v}" class="${(store.ui.theme || "town") === v ? "on" : ""}">${t}</button>`).join("")}</div>
+      </section>
+      <section>
+        <h4>3D 畫質</h4>
+        <p class="muted" style="margin:0 0 8px">高畫質是完整的城市、光影和夜景；輕量城市是同樣的建築和夜景，範圍小一點、光影簡單一點（電腦比較舊時用）；簡化小鎮是最早的方塊小鎮。自動：電腦用高畫質，手機用簡化小鎮（比較省電、不容易因為記憶體不夠被關掉）。手機想看完整街景可以選輕量城市。換了之後會重新載入。</p>
+        <div class="seg">${[["auto", "🪄 自動"], ["high", "✨ 高畫質"], ["mobile", "🏙️ 輕量城市"], ["low", "🧊 簡化小鎮"]].map(([v, t]) => { let q = "auto"; try { q = localStorage.getItem("novum-quality") || "auto"; } catch (e) { } return `<button type="button" data-quality="${v}" class="${q === v ? "on" : ""}">${t}</button>`; }).join("")}</div>
+      </section>
+      <section>
+        <h4>居民的自主行動</h4>
+        <button type="button" class="mode-opt tog ${store.needs !== false ? "on" : ""}" id="needsToggle" aria-pressed="${store.needs !== false}"><b>肚子餓、累了、無聊時自己跑去別處</b>${swHTML(store.needs !== false)}</button>
+      </section>
+      <section>
+        <h4>進展速度</h4>
+        <p class="muted" style="margin:0 0 8px">好感上升、自己聚會、互相約出去的頻率。</p>
+        <div class="seg">${[["slow", "🐢 慢"], ["normal", "🚶 一般"], ["fast", "🏃 快"]].map(([v, t]) => `<button type="button" data-pace="${v}" class="${(store.pace || "normal") === v ? "on" : ""}">${t}</button>`).join("")}</div>
+      </section>
+      <section>
+        <h4>好感</h4>
+        <button type="button" class="mode-opt tog ${store.bond !== false ? "on" : ""}" id="bondToggle" aria-pressed="${store.bond !== false}"><b>日常事件也會慢慢增加好感</b><span>看完有兩人以上的相遇，出場的人彼此好感 +1（沒開戀愛線時最多到 84）。</span>${swHTML(store.bond !== false)}</button>
+      </section>
+      ${store.mode === "preview" ? `
+      <details class="set-more" data-k="sim" ${setOpen.sim ? "open" : ""}>
+        <summary>🧪 模擬天氣、單雙週和節日</summary>
       <section>
         <h4>天氣</h4>
         <div class="chip-row">${["auto", "晴", "多雲", "雨", "霧"].map(w => `<button type="button" class="chip ${p.weather === w ? "on" : ""}" data-pwx="${w}">${w === "auto" ? "自動" : (WX_ICON[w] + w)}</button>`).join("")}</div>
@@ -2628,50 +2665,23 @@
         <h4>模擬節日</h4>
         <div class="chip-row">${[["auto", "跟日期"]].concat(N.festivals.filter(f => f.when).map(f => [f.id, f.icon + f.name])).map(([v, t]) => `<button type="button" class="chip ${(p.fest || "auto") === v ? "on" : ""}" data-pfest="${v}">${esc(t)}</button>`).join("")}</div>
       </section>
-      <section><button type="button" class="btn danger block" id="resetPreview">清除小鎮時間的進度</button></section>` : ""}
-      <section>
-        <h4>居民的自主行動</h4>
-        <button type="button" class="mode-opt ${store.needs !== false ? "on" : ""}" id="needsToggle"><b>肚子餓、累了、無聊時自己跑去別處：${store.needs !== false ? "開" : "關"}</b></button>
-      </section>
-      <section>
-        <h4>進展速度</h4>
-        <p class="muted" style="margin:0 0 8px">好感上升、自己聚會、互相約出去的頻率。</p>
-        <div class="seg">${[["slow", "🐢 慢"], ["normal", "🚶 一般"], ["fast", "🏃 快"]].map(([v, t]) => `<button type="button" data-pace="${v}" class="${(store.pace || "normal") === v ? "on" : ""}">${t}</button>`).join("")}</div>
-      </section>
-      <section>
-        <h4>介面顏色</h4>
-        <div class="seg seg-grid">${[["town", "🕰️ 跟著小鎮時間"], ["system", "📱 跟著手機"], ["light", "☀️ 白天"], ["dark", "🌙 夜晚"]].map(([v, t]) => `<button type="button" data-theme="${v}" class="${(store.ui.theme || "town") === v ? "on" : ""}">${t}</button>`).join("")}</div>
-      </section>
-      <section>
-        <h4>3D 畫質</h4>
-        <p class="muted" style="margin:0 0 8px">高畫質是完整的城市、光影和夜景；輕量城市是同樣的建築和夜景，範圍小一點、光影簡單一點（電腦比較舊時用）；簡化小鎮是最早的方塊小鎮。自動：電腦用高畫質，手機用簡化小鎮（比較省電、不容易因為記憶體不夠被關掉）。手機想看完整街景可以選輕量城市。換了之後會重新載入。</p>
-        <div class="seg">${[["auto", "🪄 自動"], ["high", "✨ 高畫質"], ["mobile", "🏙️ 輕量城市"], ["low", "🧊 簡化小鎮"]].map(([v, t]) => { let q = "auto"; try { q = localStorage.getItem("novum-quality") || "auto"; } catch (e) { } return `<button type="button" data-quality="${v}" class="${q === v ? "on" : ""}">${t}</button>`; }).join("")}</div>
-      </section>
-      <section>
-        <h4>音樂</h4>
-        <button type="button" class="mode-opt ${N.lofi && N.lofi.isPlaying() ? "on" : ""}" id="musicBtn2"><b>🎵 背景音樂（小鎮頁的諾文電台可以選歌）：${N.lofi && N.lofi.isPlaying() ? "開" : "關"}</b></button>
-        <div class="vol-row"><span>音量</span><input type="range" id="musicVol" min="0" max="100" value="${Math.round((store.ui.musicVol == null ? 0.5 : store.ui.musicVol) * 100)}" aria-label="音量"></div>
-        <button type="button" class="mode-opt ${store.ui.sfx !== false ? "on" : ""}" id="sfxBtn" style="margin-top:10px"><b>🔔 按鈕和互動音效：${store.ui.sfx !== false ? "開" : "關"}</b></button>
-        <div class="vol-row"><span>音效音量</span><input type="range" id="sfxVol" min="0" max="100" value="${Math.round((store.ui.sfxVol == null ? 0.6 : store.ui.sfxVol) * 100)}" aria-label="音效音量"></div>
-      </section>
-      <section>
-        <h4>加入 iPhone 主畫面</h4>
-        <div class="note">${standalone ? "<p>✅ 目前已經是主畫面 App 模式。</p>" : ""}
-          <p>1. 用 <b>Safari</b> 開啟這個小鎮的網址。<br>2. 點下方的「分享」按鈕。<br>3. 選「加入主畫面」，再按「新增」。</p>
-          <p>之後從主畫面圖示開啟，就會像一般 App 一樣全螢幕顯示。注意：iPhone 會把主畫面 App 和 Safari 的進度分開保存。</p></div>
-      </section>
+      </details>` : ""}
       <section>
         <h4>進度與備份</h4>
         <div class="note"><p>進度自動存在這台裝置的瀏覽器（localStorage），不會跨裝置同步。${storageOK ? "" : "<br><b style='color:var(--rust)'>⚠ 目前無法寫入儲存空間，關掉後進度可能遺失。</b>"}</p></div>
         <div class="sheet-actions"><button type="button" class="btn soft" id="exportBtn">複製備份</button><button type="button" class="btn soft" id="importBtn">貼上還原</button></div>
         <div id="ioArea"></div>
+        ${store.mode === "preview" ? `<button type="button" class="btn danger block" id="resetPreview" style="margin-top:12px">清除小鎮時間的進度</button>` : ""}
       </section>
-      <section>
-        <h4>好感</h4>
-        <button type="button" class="mode-opt ${store.bond !== false ? "on" : ""}" id="bondToggle"><b>日常事件也會慢慢增加好感：${store.bond !== false ? "開" : "關"}</b><span>看完有兩人以上的相遇，出場的人彼此好感 +1（沒開戀愛線時最多到 84）。</span></button>
-      </section>
+      <details class="set-more" data-k="iph" ${setOpen.iph ? "open" : ""}>
+        <summary>📲 加入 iPhone 主畫面</summary>
+        <div class="note">${standalone ? "<p>✅ 目前已經是主畫面 App 模式。</p>" : ""}
+          <p>1. 用 <b>Safari</b> 開啟這個小鎮的網址。<br>2. 點下方的「分享」按鈕。<br>3. 選「加入主畫面」，再按「新增」。</p>
+          <p>之後從主畫面圖示開啟，就會像一般 App 一樣全螢幕顯示。注意：iPhone 會把主畫面 App 和 Safari 的進度分開保存。</p></div>
+      </details>
       <p class="note" style="text-align:center;margin-top:18px">諾文小鎮 v${VERSION}・事件 ${E.allEvents().length} 則</p>
       <div class="sheet-actions"><button type="button" class="btn primary" data-close>完成</button></div>`;
+    $("#sheetBody").querySelectorAll("details[data-k]").forEach(d => d.addEventListener("toggle", () => { setOpen[d.dataset.k] = d.open; }));
   }
   function renderProvisional() {
     sheetState = { type: "prov" };
