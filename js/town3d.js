@@ -110,7 +110,7 @@
     let w0 = 0, h0 = 0;
     return {
       mat,
-      render(scene, camera) {
+      render(scene, camera, out) {
         const sz = rend.getDrawingBufferSize(new T.Vector2());
         if (sz.x !== w0 || sz.y !== h0) { w0 = sz.x; h0 = sz.y; rt.setSize(w0, h0); rtA.setSize(w0 >> 1, h0 >> 1); rtB.setSize(w0 >> 1, h0 >> 1); mat.uniforms.res.value.set(w0, h0); }
         rend.setRenderTarget(rt); rend.clear(); rend.render(scene, camera);
@@ -122,7 +122,7 @@
             blur.uniforms.t.value = rtB.texture; blur.uniforms.dir.value.set(0, py * k); pass(blur, rtA);
           }
         }
-        pass(mat, null);
+        pass(mat, out || null);
       }
     };
   }
@@ -2661,7 +2661,7 @@
     const q = GRID.rb(cam.target.x, cam.target.z), lim = cam.target.x < GRID.cx ? 1.18 : 0.98;
     if (q > lim) { const k = lim / q; cam.target.x = GRID.cx + (cam.target.x - GRID.cx) * k; cam.target.z = GRID.cz + (cam.target.z - GRID.cz) * k; }
     // 手機（觸控）看小鎮時不能拉得太近：一捏就會貼到路燈上；操控居民時照原本的距離
-    const minD = TC || (window.matchMedia && matchMedia("(pointer:fine)").matches) ? 5 : 16;
+    const minD = PH.on ? 2.5 : TC || (window.matchMedia && matchMedia("(pointer:fine)").matches) ? 5 : 16;   // 拍照模式可以拉更近
     cam.dist = Math.max(minD, Math.min(MQ() ? 75 : HQ() ? 105 : 120, cam.dist));
   }
   let interacting = 0;
@@ -2745,6 +2745,7 @@
     });
   }
   function tap(cx, cy) {
+    if (PH.on) return;   // 拍照模式：點畫面不跳卡片
     const r = renderer.domElement.getBoundingClientRect();
     const v = new T.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     const rc = new T.Raycaster(); rc.setFromCamera(v, camera); if (rc.layers) rc.layers.enableAll();
@@ -2809,13 +2810,14 @@
     if (OVH.lanMat) { const nf0 = state ? nightFactor(state.min) : 0; OVH.lanMat.color.setScalar(0.55 + nf0 * 0.6); }
     directorFrame(dt, now);
     placeCamera();
+    const dtW = PH.freeze ? 0 : dt, ttW = PH.freeze ? PH.ft : tt;   // 拍照模式的「定格」：居民停在原地
     // 走路
     const talkingIds = new Set(bubbles.map(b => b.id));
     for (const id in walkers) {
       const w = walkers[id];
       let walking = false;
       if (w.train) {
-        w.trainT += dt;
+        w.trainT += dtW;
         const k = w.trainT / 1.6;
         if (k < 0.5) w.fade = 1 - k * 2;
         else { if (!w.trainArrived) { w.pos.copy(w.trainTo); w.trainArrived = true; } w.fade = Math.min(1, (k - 0.5) * 2); }
@@ -2824,11 +2826,11 @@
         const tgt = w.path[0], d = tgt.clone().sub(w.pos); d.y = 0;
         const len = d.length(), sp = w.speed || WALK;
         if (len > 0.001) w.wantYaw = Math.atan2(d.x, d.z);
-        if (len < sp * dt) { w.pos.copy(tgt); w.path.shift(); }
-        else w.pos.add(d.multiplyScalar(sp * dt / len));
+        if (len < sp * dtW) { w.pos.copy(tgt); w.path.shift(); }
+        else w.pos.add(d.multiplyScalar(sp * dtW / len));
         walking = true;
       }
-      if (w.manualWalk > 0) { w.manualWalk -= dt; walking = true; }   // 搖桿／鍵盤直接走
+      if (w.manualWalk > 0) { w.manualWalk -= dtW; walking = true; }   // 搖桿／鍵盤直接走
       const Lw = !w.path.length && !w.train && lots[w.loc];
       const indoors = Lw && !Lw.open && Math.abs(w.pos.x - Lw.x) < 3 && w.pos.z < Lw.z + 1;
       // 姿勢：到位之後才坐下、躺下
@@ -2840,26 +2842,26 @@
         else if (pose === "sit") { w.body.rotation.set(0, 0, 0); w.body.scale.set(1, 0.62, 1); w.body.position.set(0, 0.24, 0); w.head.position.set(0, 1.0, 0); }
         else { w.body.rotation.set(0, 0, 0); w.body.scale.set(1, 1, 1); w.body.position.set(0, 0.39, 0); w.head.position.set(0, 1.35, 0); }
       }
-      const sc0 = 1.45, sc = w.g.scale.x + (sc0 - w.g.scale.x) * Math.min(1, dt * 5);
+      const sc0 = 1.45, sc = w.g.scale.x + (sc0 - w.g.scale.x) * Math.min(1, dtW * 5);
       w.g.scale.set(sc, sc, sc);
       const baseY = pose === "stand" ? groundAt(w.pos.x, w.pos.z) : (w.destY || 0);
-      const bob = w.ch ? 0 : walking ? Math.abs(Math.sin(tt * 11 + w.phase)) * 0.22 : (w.asleep || pose !== "stand" ? 0 : Math.sin(tt * 2 + w.phase) * 0.04);
+      const bob = w.ch ? 0 : walking ? Math.abs(Math.sin(ttW * 11 + w.phase)) * 0.22 : (w.asleep || pose !== "stand" ? 0 : Math.sin(ttW * 2 + w.phase) * 0.04);
       w.g.position.set(w.pos.x, baseY + bob, w.pos.z);
       w.g.visible = !indoors && !(FP.on && TC && w.id === TC.id);
       if (w.ch) {
         const want = walking ? (w.wantYaw || 0) : w.destYaw != null ? w.destYaw : w.yaw;   // 站著維持方向；說話時面向對方
-        w.yaw = turnTo(w.yaw, want, Math.min(1, dt * (walking ? 10 : pose !== "stand" ? 12 : 3)));
+        w.yaw = turnTo(w.yaw, want, Math.min(1, dtW * (walking ? 10 : pose !== "stand" ? 12 : 3)));
         w.ch.root.rotation.y = w.yaw;
         w.ch.root.visible = w.fade > 0.3;
-        if (w.g.visible) w.ch.update(dt, tt, { walking, speed: w.manualWalk > 0 ? (shiftDown ? TRUN : TSPEED) : (w.speed || WALK), asleep: w.asleep, talking: talkingIds.has(id) || ENC_TALK.has(id), act: walking ? null : w.actTag });
+        if (w.g.visible) w.ch.update(dtW, ttW, { walking, speed: w.manualWalk > 0 ? (shiftDown ? TRUN : TSPEED) : (w.speed || WALK), asleep: w.asleep, talking: talkingIds.has(id) || ENC_TALK.has(id), act: walking ? null : w.actTag });
       } else {
         w.head.material.opacity = (w.asleep ? 0.6 : 1) * w.fade;
         w.body.visible = w.fade > 0.3;
       }
       w.ring.visible = state && state.observing === id;
-      if (w.ring.visible) { const s = 1 + Math.sin(tt * 4) * 0.08; w.ring.scale.set(s, s, s); }
+      if (w.ring.visible) { const s = 1 + Math.sin(ttW * 4) * 0.08; w.ring.scale.set(s, s, s); }
       w.zz.visible = w.asleep && w.fade > 0.5;
-      if (w.zz.visible) w.zz.position.y = 2.1 + Math.sin(tt * 1.5 + w.phase) * 0.12;
+      if (w.zz.visible) w.zz.position.y = 2.1 + Math.sin(ttW * 1.5 + w.phase) * 0.12;
       if (FP.on) {
         // 第一人稱：名牌只顯示附近 8 單位內的人，縮小、放在頭頂上
         if (!w.name.userData.s0) w.name.userData.s0 = w.name.scale.clone();
@@ -2908,24 +2910,25 @@
     // 天氣
     if (rain.visible) {
       const a = rain.geometry.attributes.position;
-      for (let i = 0; i < a.count; i++) { let y = a.getY(i) - dt * 26; if (y < 0) y += 30; a.setY(i, y); }
+      for (let i = 0; i < a.count; i++) { let y = a.getY(i) - dtW * 26; if (y < 0) y += 30; a.setY(i, y); }
       a.needsUpdate = true;
       rain.position.set(cam.target.x, 0, cam.target.z);
     }
     const camY = camera.position.y;
     cloudMat.opacity = 0.85 * Math.max(0, Math.min(1, (Math.abs(camY - 36) - 6) / 10));
-    for (const c of clouds) { c.position.x += c.userData.v * dt; if (c.position.x > 90) c.position.x = -55; }
+    for (const c of clouds) { c.position.x += c.userData.v * dtW; if (c.position.x > 90) c.position.x = -55; }
     if (fireflies.visible) {
       const a = fireflies.geometry.attributes.position, base = fireflies.userData.base;
       for (let i = 0; i < a.count; i++) { a.setX(i, base[i * 3] + Math.sin(tt * 0.7 + i) * 0.5); a.setY(i, base[i * 3 + 1] + Math.sin(tt * 1.3 + i * 2) * 0.3); }
       a.needsUpdate = true;
       fireflies.material.opacity = 0.5 + Math.sin(tt * 3) * 0.4;
     }
-    lifeFrame(dt, tt, state ? nightFactor(state.min) : 0, state && state.weather === "雨");
-    carsFrame(dt, state ? nightFactor(state.min) : 0);
+    lifeFrame(dtW, ttW, state ? nightFactor(state.min) : 0, state && state.weather === "雨");
+    carsFrame(dtW, state ? nightFactor(state.min) : 0);
     anomFrame(tt);
     trafficFrame(tt);
     festGroup.children.forEach((m, i) => { m.position.y = m.userData.y + ((tt * 0.8 + i * 0.37) % 6); m.material.opacity = 1 - ((tt * 0.8 + i * 0.37) % 6) / 6; });
+    const phHid = PH.on && PH.clean ? photoHide() : null, phOut = photoTarget();
     VOXU.uVox.value = 0.25; VOXU.uAO.value = 0.9; VOXU.uFloorY.value = 0; if (VOXU.uRoomBox.value) VOXU.uRoomBox.value.z = 0;
     if (HQ()) {
       // 城市外圍用霧蓋住：霧跟著鏡頭遠近，城裡看得清楚、邊緣慢慢消失
@@ -2933,7 +2936,7 @@
       if (FP.on) { scene.fog.near = 28 * fogK; scene.fog.far = 118 * fogK; }   // 平視時遠處交給霧
       else { scene.fog.near = (MQ() ? 55 : 80) * fogK; scene.fog.far = (MQ() ? 150 : 215) * fogK; }   // 固定距離：放大縮小時顏色不會跟著變
       if (!townPost) townPost = makePost(renderer, MQ() ? 0 : 0.7);
-      townPost.mat.uniforms.amount.value = FP.on || MQ() ? 0 : 0.7;   // 第一人稱不要移軸模糊
+      townPost.mat.uniforms.amount.value = FP.on || MQ() || (PH.on && PH.tilt > 0) ? 0 : 0.7;   // 拍照模式開了移軸就用拍照的那一套   // 第一人稱不要移軸模糊
       const nfB = state ? nightFactor(state.min) : 0;
       townPost.mat.uniforms.bloom.value = MQ() ? 0 : nfB * 0.5;
       townPost.mat.uniforms.grade.value = Math.min(1, nfB * 1.4);
@@ -2942,10 +2945,13 @@
         U.dCon.value = -0.05 * mk + 0.05 * ek;              // 早上柔、下午分明
         U.dHi.value.set(0.06 * mk + 0.05 * ek, 0.04 * mk + 0.012 * ek, 0.01 * mk - 0.035 * ek);
         U.dSh.value.set(0.075 * mk + 0.025 * ek, 0.045 * mk - 0.012 * ek, 0.02 * mk + 0.055 * ek); }   // 傍晚開始調色   // 白天不開光暈；晚上只讓發光的東西微微暈開
-      camera.layers.set(0); townPost.render(scene, camera);
+      camera.layers.set(0); townPost.render(scene, camera, phOut);
       const bg = scene.background; scene.background = null;   // 背景是顏色時 three 會強制清畫面
       renderer.autoClear = false; camera.layers.set(1); renderer.render(scene, camera); renderer.autoClear = true; camera.layers.set(0); scene.background = bg;
-    } else { camera.layers.enable(1); renderer.render(scene, camera); }
+    } else { if (phOut) renderer.setRenderTarget(phOut); camera.layers.enable(1); renderer.render(scene, camera); }
+    if (phOut) photoPass(phOut);
+    if (phHid) for (const o of phHid) o.visible = true;
+    if (PH.shot) { const cb = PH.shot; PH.shot = null; try { cb(renderer.domElement); } catch (e) { console.warn("photo", e); } }
   }
 
 
@@ -3915,6 +3921,7 @@
   function townEmote(id, name) { const w = walkers[id]; if (w && w.ch && w.ch.emote) w.ch.emote(name); }
   function update(s) {
     if (!built) return;
+    PH.real = s; s = photoState(s);
     state = s;
     applySky(s.min, s.weather);
     // 居民位置
@@ -4469,7 +4476,115 @@
     return null;
   };
 
+  /* ═════════ 拍照模式：時間／天氣只改畫面（不動存檔）、拿掉名牌標記、濾鏡與移軸、定格、存成圖片 ═════════ */
+  const PH = { on: false, min: null, weather: null, clean: true, freeze: false, ft: 0, filter: 0, tilt: 0, focus: 0.5, fov: 36, fov0: 36, shot: null, real: null, rt: null, mat: null, sc: null, cm: null };
+  function photoState(s) {
+    if (!PH.on || (PH.min == null && !PH.weather)) return s;
+    return Object.assign({}, s, { min: PH.min == null ? s.min : PH.min, weather: PH.weather || s.weather });
+  }
+  // 畫這一幀之前先把名牌、人數牌、提示、泡泡藏起來，畫完再放回去（不改它們平常的狀態）
+  function photoHide() {
+    const out = [], hide = o => { if (o && o.visible) { o.visible = false; out.push(o); } };
+    labelSprites.forEach(hide); districtSprites.forEach(hide);
+    for (const id in lots) hide(lots[id].badge);
+    for (const id in hintMarks) hide(hintMarks[id]);
+    for (const id in walkers) { const w = walkers[id]; hide(w.name); hide(w.ring); hide(w.zz); }
+    bubbles.forEach(b => hide(b.sp));
+    return out;
+  }
+  function photoTarget() {
+    if (!PH.on || (!PH.filter && PH.tilt <= 0)) return null;
+    if (!PH.rt) {
+      const ms = renderer.capabilities && renderer.capabilities.isWebGL2 && T.WebGLMultisampleRenderTarget;
+      PH.rt = ms ? new T.WebGLMultisampleRenderTarget(4, 4, { minFilter: T.LinearFilter, magFilter: T.LinearFilter }) : new T.WebGLRenderTarget(4, 4, { minFilter: T.LinearFilter, magFilter: T.LinearFilter });
+      if (ms) PH.rt.samples = 4;
+      PH.mat = new T.ShaderMaterial({
+        uniforms: { t: { value: PH.rt.texture }, res: { value: new T.Vector2(1, 1) }, mode: { value: 0 }, tilt: { value: 0 }, focus: { value: 0.5 }, seed: { value: 0 } },
+        vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+        fragmentShader: `uniform sampler2D t; uniform vec2 res; uniform float mode; uniform float tilt; uniform float focus; uniform float seed; varying vec2 vUv;
+          float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + seed) * 43758.5453); }
+          float hash0(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+          void main(){
+            vec3 c;
+            // 移軸：對焦那一條清楚，越往上下越糊（像拍微縮模型）
+            // 用螺旋狀取樣、每個像素轉一個角度：模糊比較圓滑，不會出現一格一格的網紋
+            float d = abs(vUv.y - focus), r = smoothstep(0.06, 0.42, d) * 22.0 * tilt * res.y / 900.0;
+            if (r < 0.4) c = texture2D(t, vUv).rgb;
+            else {
+              vec3 sum = texture2D(t, vUv).rgb; float tot = 1.0, a0 = hash0(floor(vUv * res)) * 6.2832;
+              for (int i = 1; i < 32; i++) {
+                float k = float(i), rr = sqrt(k / 31.0) * r, a = a0 + k * 2.39996;
+                sum += texture2D(t, vUv + vec2(cos(a), sin(a)) * rr / res).rgb; tot += 1.0;
+              }
+              c = sum / tot;
+            }
+            float l = dot(c, vec3(0.299, 0.587, 0.114));
+            if (tilt > 0.001) { c = mix(vec3(l), c, 1.0 + 0.3 * tilt); c = (c - 0.5) * (1.0 + 0.1 * tilt) + 0.5; l = dot(c, vec3(0.299, 0.587, 0.114)); }
+            vec2 q = vUv - 0.5; float vg = dot(q, q); float n = hash(floor(vUv * res)) - 0.5;
+            if (mode > 0.5 && mode < 1.5) {          // 底片：暗部微微發灰、偏暖、顆粒
+              c = mix(vec3(l), c, 0.88) * vec3(1.05, 1.0, 0.9) + vec3(0.04, 0.03, 0.05);
+              c = (c - 0.5) * 0.92 + 0.5 + n * 0.06; c *= 1.0 - vg * 0.9;
+            } else if (mode < 2.5 && mode > 1.5) {   // 黑白
+              c = vec3((l - 0.5) * 1.15 + 0.5) + n * 0.04; c *= 1.0 - vg * 0.7;
+            } else if (mode < 3.5 && mode > 2.5) {   // 懷舊：褐色老照片
+              c = mix(c, vec3(l) * vec3(1.08, 0.93, 0.72) + vec3(0.05, 0.03, 0.0), 0.85) + n * 0.05; c *= 1.0 - vg * 1.1;
+            } else if (mode < 4.5 && mode > 3.5) {   // 粉彩：亮一點、對比低、帶一點粉
+              c = mix(c, vec3(1.0, 0.92, 0.95), 0.12); c = (c - 0.5) * 0.86 + 0.56; c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, 1.12);
+            } else if (mode > 4.5) {                 // 電影：暗部偏青、亮部偏橘、四周暗一點
+              c += vec3(-0.01, 0.04, 0.07) * (1.0 - smoothstep(0.0, 0.5, l)) + vec3(0.07, 0.025, -0.04) * smoothstep(0.4, 1.0, l);
+              c = (c - 0.5) * 1.12 + 0.5; c *= 1.0 - vg * 0.6;
+            }
+            gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+          }`, depthTest: false, depthWrite: false });
+      PH.sc = new T.Scene(); PH.cm = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      PH.sc.add(new T.Mesh(new T.PlaneGeometry(2, 2), PH.mat));
+    }
+    const sz = renderer.getDrawingBufferSize(new T.Vector2());
+    if (PH.rt.width !== sz.x || PH.rt.height !== sz.y) { PH.rt.setSize(sz.x, sz.y); PH.mat.uniforms.res.value.set(sz.x, sz.y); }
+    renderer.setRenderTarget(PH.rt); renderer.clear();
+    return PH.rt;
+  }
+  function photoPass() {
+    const U = PH.mat.uniforms;
+    U.mode.value = PH.filter; U.tilt.value = PH.tilt; U.focus.value = PH.focus; U.seed.value = PH.freeze || PH.shot ? 1 : (performance.now() % 1000) / 100;
+    const ac = renderer.autoClear; renderer.autoClear = true;
+    renderer.setRenderTarget(null); renderer.render(PH.sc, PH.cm);
+    renderer.autoClear = ac;
+  }
+  const photo = {
+    enter() {
+      if (!built) return false;
+      PH.on = true; PH.fov0 = camera.fov; PH.fov = camera.fov;
+      PH.cam0 = { target: cam.target.clone(), dist: cam.dist, polar: cam.polar, az: cam.az };   // 離開時回到進來前的鏡頭
+      if (director.on) setDirector(false);
+      return true;
+    },
+    exit() {
+      PH.on = false; PH.min = null; PH.weather = null; PH.freeze = false;
+      if (camera) { camera.fov = PH.fov0; camera.updateProjectionMatrix(); }
+      if (PH.cam0) { cam.fly = null; cam.follow = null; cam.target.copy(PH.cam0.target); cam.dist = PH.cam0.dist; cam.polar = PH.cam0.polar; cam.az = PH.cam0.az; PH.cam0 = null; }
+      clampTarget();
+      if (PH.real) update(PH.real);
+    },
+    isOn: () => PH.on,
+    get: () => ({ min: PH.min, weather: PH.weather, clean: PH.clean, freeze: PH.freeze, filter: PH.filter, tilt: PH.tilt, focus: PH.focus, fov: PH.fov, polar: cam.polar, realMin: PH.real ? PH.real.min : 720, realWeather: PH.real ? PH.real.weather : "晴" }),
+    set(o) {
+      if ("min" in o) PH.min = o.min;
+      if ("weather" in o) PH.weather = o.weather;
+      if ("clean" in o) PH.clean = !!o.clean;
+      if ("freeze" in o) { PH.freeze = !!o.freeze; PH.ft = performance.now() / 1000; }
+      if ("filter" in o) PH.filter = o.filter | 0;
+      if ("tilt" in o) PH.tilt = Math.max(0, Math.min(1, +o.tilt));
+      if ("focus" in o) PH.focus = Math.max(0.1, Math.min(0.9, +o.focus));
+      if ("polar" in o) { cam.polar = Math.max(0.25, Math.min(1.5, +o.polar)); cam.fly = null; }
+      if ("fov" in o && camera) { PH.fov = Math.max(14, Math.min(70, +o.fov)); camera.fov = PH.fov; camera.updateProjectionMatrix(); }
+      if (("min" in o || "weather" in o) && PH.real) update(PH.real);
+    },
+    // 下一幀畫完時把畫布交給 cb（WebGL 畫布要在同一幀裡讀，不然會是空白）
+    capture(cb) { PH.shot = cb; }
+  };
+
   N.town3d_debug = () => ({ scene, wPath, routeTo, cars, roadNet: () => roadNet, groundAt, COAST, walkGrid, alleyOf, ENTR, camera, FP, GRID, cam, TC, WG, walkers, lots, RM, occAt, cellOf, roomPath, buildRoom });
   N.town3d = { rotate: a => { cam.fly = null; const a0 = cam.az, t0 = performance.now(); const step = () => { const k = Math.min(1, (performance.now() - t0) / 350); cam.az = a0 + a * (1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); }; step(); }, setAnomaly, supported, mount, unmount, update, say, emote: townEmote, focus, flyRegion, flyLoc, setLabels, setXray, setDirector, home, pause,
-    isFollowing: () => cam.follow, unfollow: () => { cam.follow = null; }, isReady: () => built, ctl: tCtl };
+    isFollowing: () => cam.follow, unfollow: () => { cam.follow = null; }, isReady: () => built, ctl: tCtl, photo };
 })();

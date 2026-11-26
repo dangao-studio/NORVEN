@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.24.0";
+  const VERSION = "3.25.0";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -487,6 +487,7 @@
           <button type="button" id="t3dLabels" class="${store.ui.labels3d !== false ? "on" : ""}" aria-label="顯示地名">🏷️</button>
           <button type="button" id="t3dFollow" aria-label="鏡頭跟著居民">📍</button>
           <button type="button" id="t3dWatch" aria-label="放著看">📺</button>
+          ${N.photo ? `<button type="button" id="t3dPhoto" aria-label="拍照模式" title="拍照模式">📷</button>` : ""}
           <button type="button" data-rot3d="1" aria-label="向左轉" title="向左轉（Q；右鍵或 Shift＋拖曳也能轉）">⟲</button>
           <button type="button" data-rot3d="-1" aria-label="向右轉" title="向右轉（E）">⟳</button>
         </div>
