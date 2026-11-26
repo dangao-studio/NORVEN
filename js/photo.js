@@ -115,7 +115,7 @@
     el.className = "ph-preview"; el.id = "phPreview";
     el.innerHTML = `<div class="ph-card">
         <img src="${lastURL}" alt="剛剛拍的小鎮照片">
-        <p class="ph-tip">${share ? "按「存到相簿」會打開分享選單，選「儲存影像」就會進相簿。" : "也可以在圖片上按右鍵或長按另存。"}</p>
+        <p class="ph-tip">${share ? "按「存到相簿」會打開分享選單，選「儲存影像」就會進相簿。" : (matchMedia("(pointer:fine)").matches ? "也可以在圖片上按右鍵另存。" : "也可以長按圖片儲存。")}</p>
         <div class="ph-acts">
           <button type="button" class="btn soft" id="phAgain">再拍一張</button>
           ${share ? `<button type="button" class="btn primary" id="phShare">存到相簿</button>` : ""}

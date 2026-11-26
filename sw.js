@@ -1,6 +1,6 @@
 /* 諾文小鎮 Service Worker：離線也能打開
  * 更新內容後，把 CACHE 的版本號 +1，使用者下次開啟就會拿到新版。 */
-const CACHE = "novum-town-v3.24.0";
+const CACHE = "novum-town-v3.25.0";
 const FILES = [
   "./", "index.html", "manifest.webmanifest", "css/style.css",
   "data/characters.js", "data/locations.js", "data/schedules.js",
