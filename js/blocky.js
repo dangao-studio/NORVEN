@@ -58,30 +58,100 @@
       root, height: 1.6,
       pickables: () => meshes,
       setPose: (p, hz) => setPose(st, p, hz),
-      update: (dt, tt, o) => update(st, dt, tt, o || {})
+      update: (dt, tt, o) => update(st, dt, tt, o || {}),
+      emote: name => emote(st, name)
     };
   }
   function setPose(st, p, hz) {
     if (st.pose === p) return; st.pose = p;
     st.rig.rotation.set(0, 0, 0); st.rig.position.set(0, 0, 0); st.legs.forEach(g => g.rotation.set(0, 0, 0));
+    st.body.rotation.x = 0;
     if (p === "sit") { st.legs.forEach(g => { g.rotation.x = -Math.PI / 2; }); st.rig.position.y = -0.56; }
     if (p === "lie") { st.rig.rotation.x = -Math.PI / 2; st.rig.position.set(0, 0.12, (hz == null ? -0.5 : hz) + 1.4); }
   }
-  // o = { walking, asleep, talking }
+  /* ───── 動作 ─────
+   * 一層一層疊：走路 → 待著（呼吸、東張西望）→ 正在做的事（煮菜、讀書、打鼓、吃東西、做工）→ 說話的手勢 → 表情動作（揮手、擊掌、歡呼……）。
+   * 每一層只給「想要的角度」，最後一起平滑轉過去，所以換動作不會一下跳過去。
+   * o = { walking, speed, asleep, talking, act } */
+  const EMO = { wave: 1.8, nod: 1.0, cheer: 1.6, shrug: 1.3, give: 1.6, high: 1.2, pat: 1.6, hug: 2.2, laugh: 1.6, think: 2.0, bow: 1.4, surprise: 1.0, clap: 1.4 };
+  const GEST = ["explain", "explain", "open", "point", "tilt", "still", "hip", "nod"];
+  const lerp = (a, b, k) => a + (b - a) * k;
+  function emote(st, name) { if (EMO[name]) st.emo = { name, t: 0, dur: EMO[name] }; }
   function update(st, dt, tt, o) {
     const ph = st.phase, [la, ra] = st.arms, [ll, rl] = st.legs;
-    let ax = 0, bodyY = 0, nod = 0;
-    if (st.pose === "stand" && o.walking) {
+    // 想要的角度：左右手 [x, z]、頭 [x, y, z]、身體 [前傾, 高度, 側傾]
+    const L = [0, -0.05], R = [0, 0.05], H = [0, 0, 0], B = [0, 0, 0];
+    let walking = st.pose === "stand" && o.walking;
+    if (walking) {
       // 步伐跟速度走：慢慢走小步、跑步大步又快
       const sp = o.speed || 1, fq = 5.5 + sp * 3.2, amp = Math.min(0.85, 0.4 + sp * 0.18);
       st.wph = (st.wph || 0) + dt * fq;
-      const w = Math.sin(st.wph + ph); ll.rotation.x = w * amp; rl.rotation.x = -w * amp; ax = w * amp * 1.1; bodyY = Math.abs(Math.cos(st.wph + ph)) * (0.015 + sp * 0.012);
-    } else if (st.pose === "stand") { ll.rotation.x = rl.rotation.x = 0; bodyY = o.asleep ? 0 : Math.sin(tt * 1.6 + ph) * 0.006; }
-    else if (st.pose === "sit") ax = -0.5;
-    if (o.talking) { st.talkT += dt; nod = Math.sin(st.talkT * 7) * 0.08; } else st.talkT = 0;
-    la.rotation.set(-ax, 0, -0.05); ra.rotation.set(ax, 0, 0.05);
-    st.head.rotation.x = o.asleep && st.pose !== "lie" ? 0.35 : nod;
-    st.body.position.y = bodyY;
+      const w = Math.sin(st.wph + ph); ll.rotation.x = w * amp; rl.rotation.x = -w * amp;
+      L[0] = -w * amp * 1.1; R[0] = w * amp * 1.1; B[1] = Math.abs(Math.cos(st.wph + ph)) * (0.015 + sp * 0.012);
+    } else if (st.pose === "stand") {
+      ll.rotation.x = rl.rotation.x = 0;
+      if (!o.asleep) {
+        // 待著：呼吸、手輕輕擺、偶爾左右看看
+        B[1] = Math.sin(tt * 1.6 + ph) * 0.006;
+        L[0] = Math.sin(tt * 0.9 + ph) * 0.04; R[0] = -L[0];
+        const look = Math.sin(tt * 0.23 + ph * 3) + Math.sin(tt * 0.61 + ph);
+        H[1] = Math.abs(look) > 1.2 ? Math.sign(look) * 0.45 : look * 0.12;
+        H[0] = Math.sin(tt * 0.37 + ph) * 0.05;
+      }
+    } else if (st.pose === "sit") { L[0] = R[0] = -0.5; H[1] = Math.sin(tt * 0.3 + ph) * 0.15; }
+    // 正在做的事
+    const act = !walking && !o.asleep && !o.talking ? o.act : null;
+    if (act === "cook") { L[0] = -1.0 + Math.sin(tt * 5 + ph) * 0.18; R[0] = -1.1 + Math.sin(tt * 5 + ph + 2) * 0.18; L[1] = 0.15; R[1] = -0.15; H[0] = 0.3; }
+    else if (act === "study") { L[0] = R[0] = -1.05; L[1] = 0.2; R[1] = -0.2; H[0] = 0.35 + Math.sin(tt * 0.5 + ph) * 0.05; if (Math.sin(tt * 0.4 + ph) > 0.97) R[1] = -0.5; }
+    else if (act === "drum") { L[0] = -0.9 + Math.sin(tt * 13 + ph) * 0.45; R[0] = -0.9 + Math.sin(tt * 13 + ph + 3) * 0.45; H[0] = Math.sin(tt * 6.5) * 0.12; }
+    else if (act === "work") { R[0] = -1.1 + Math.abs(Math.sin(tt * 4 + ph)) * 0.6; L[0] = -0.9; H[0] = 0.3; }
+    else if (act === "eat") { const c = (tt * 0.4 + ph) % 1; if (c < 0.2) { R[0] = -2.0; R[1] = 0.35; } else R[0] = st.pose === "sit" ? -0.9 : -0.4; L[0] = st.pose === "sit" ? -0.8 : -0.2; }
+    // 說話：每隔一兩秒換一個手勢
+    if (o.talking && !o.asleep) {
+      st.talkT += dt; st.gT = (st.gT || 0) - dt;
+      if (st.gT <= 0) { st.g = GEST[Math.floor(Math.random() * GEST.length)]; st.gT = 1.1 + Math.random() * 1.6; }
+      const t = st.talkT, g = st.g;
+      if (g === "explain") { R[0] = -0.95 + Math.sin(t * 5) * 0.15; R[1] = -0.25; }
+      else if (g === "open") { L[0] = R[0] = -0.6; L[1] = 0.55; R[1] = -0.55; }
+      else if (g === "point") { R[0] = -1.45; R[1] = -0.05; }
+      else if (g === "tilt") { H[2] = 0.18; }
+      else if (g === "hip") { L[1] = 0.5; R[1] = -0.5; L[0] = R[0] = 0.15; }
+      H[0] += g === "nod" ? Math.sin(t * 9) * 0.12 : Math.sin(t * 7) * 0.05;
+      if (st.pose === "sit") { L[0] = Math.min(L[0], -0.5); R[0] = Math.min(R[0], -0.5); }
+    } else st.talkT = 0;
+    // 表情動作（一次性，前後淡入淡出）
+    const e = st.emo;
+    if (e) {
+      e.t += dt;
+      const k = Math.min(1, e.t / 0.18, (e.dur - e.t) / 0.25), f = e.t;
+      if (e.t >= e.dur) st.emo = null;
+      else {
+        const mix = (arr, v) => { arr[0] = lerp(arr[0], v[0], k); arr[1] = lerp(arr[1], v[1], k); };
+        switch (e.name) {
+          case "wave": mix(R, [-0.2, -2.6 + Math.sin(f * 12) * 0.35]); break;
+          case "nod": H[0] = lerp(H[0], Math.sin(f * 10) * 0.28, k); break;
+          case "cheer": mix(L, [-0.2, 2.7]); mix(R, [-0.2, -2.7]); B[1] += Math.abs(Math.sin(f * 9)) * 0.08 * k; break;
+          case "shrug": mix(L, [-0.5, 0.6]); mix(R, [-0.5, -0.6]); H[2] = lerp(H[2], 0.2, k); B[1] += 0.02 * k; break;
+          case "give": mix(L, [-1.35, -0.1]); mix(R, [-1.35, 0.1]); B[0] = lerp(B[0], 0.12, k); break;
+          case "high": mix(R, [-2.9, -0.2]); break;
+          case "pat": mix(R, [-1.75 + Math.sin(f * 10) * 0.12, 0.1]); break;
+          case "hug": mix(L, [-1.35, -0.45]); mix(R, [-1.35, 0.45]); B[0] = lerp(B[0], 0.1, k); break;
+          case "laugh": H[0] = lerp(H[0], -0.25, k); B[1] += Math.abs(Math.sin(f * 14)) * 0.025 * k; mix(L, [-0.4, 0.1]); mix(R, [-0.4, -0.1]); break;
+          case "think": mix(R, [-2.3, 0.35]); H[2] = lerp(H[2], -0.15, k); H[0] = lerp(H[0], -0.1, k); break;
+          case "bow": { const w = k * Math.sin(Math.min(1, f / e.dur) * Math.PI); H[0] = lerp(H[0], 0.55, w); B[0] = lerp(B[0], 0.08, w); mix(L, [-0.15, -0.05]); mix(R, [-0.15, 0.05]); break; }
+          case "surprise": mix(L, [-0.3, 0.9]); mix(R, [-0.3, -0.9]); H[0] = lerp(H[0], -0.2, k); B[1] += 0.06 * k * Math.max(0, 1 - f * 3); break;
+          case "clap": { const c = Math.sin(f * 16) * 0.2; mix(L, [-1.3, -0.35 - c]); mix(R, [-1.3, 0.35 + c]); break; }
+        }
+      }
+    }
+    // 平滑轉到想要的角度
+    const sk = Math.min(1, dt * 12);
+    la.rotation.x = lerp(la.rotation.x, L[0], sk); la.rotation.z = lerp(la.rotation.z, L[1], sk);
+    ra.rotation.x = lerp(ra.rotation.x, R[0], sk); ra.rotation.z = lerp(ra.rotation.z, R[1], sk);
+    if (o.asleep && st.pose !== "lie") { H[0] = 0.35; H[1] = 0; }
+    st.head.rotation.x = lerp(st.head.rotation.x, H[0], sk); st.head.rotation.y = lerp(st.head.rotation.y, H[1], Math.min(1, dt * 4)); st.head.rotation.z = lerp(st.head.rotation.z, H[2], sk);
+    st.body.rotation.x = lerp(st.body.rotation.x, B[0], sk);
+    st.body.position.y = B[1];
   }
   N.blocky = { make, has: id => !!skinOf(id) };
 })();

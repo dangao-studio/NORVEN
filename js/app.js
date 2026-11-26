@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.22.2";
+  const VERSION = "3.23.0";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -466,7 +466,8 @@
       const w2 = currentWhere(Object.assign({}, c, { min: c.min + k, abs: c.abs + k }), true);
       for (const id in w2) if (!ahead[id] && where[id] && w2[id] && w2[id].loc !== where[id].loc) ahead[id] = { loc: w2[id].loc, in: k };
     }
-    return { min: c.min, weather: c.weather, where, ahead, rate, hints: hintSet(c, where), observing: s.observing, fests: tf, partyLoc: s.encounter && s.encounter.party ? s.encounter.loc : null };
+    return { min: c.min, weather: c.weather, where, ahead, rate, hints: hintSet(c, where), observing: s.observing, fests: tf, partyLoc: s.encounter && s.encounter.party ? s.encounter.loc : null,
+      talking: s.encounter && !s.encounter.done && !s.encounter.pending ? s.encounter.cast.slice() : [] };
   }
   function renderTown3d(el, c) {
     const sp = store.preview, live = store.mode === "preview";
@@ -881,7 +882,7 @@
     const s = slot(), enc = s.encounter; if (!enc || enc.done) return;
     const ev = encEvent(enc); if (!ev) return;
     if (enc.step < ev.lines.length - 1) {
-      enc.step++; save(true); sfx("pop");
+      enc.step++; save(true); sfx("pop"); lineEmote(enc);
       const t = $("#transcript");
       if (t) {
         t.querySelectorAll(".line.cur").forEach(n => { n.classList.remove("cur"); n.classList.add("old"); });
@@ -1365,8 +1366,7 @@
     return o.concat([back]);
   }
   function ctlInteract(b, action) {
-    CT().ctlApproach(b);
-    sheetState = { type: "interact", who: ctl.id, target: b };
+    sheetState = { type: "interact", who: ctl.id, target: b };   // 不用自己走過去：對方會站起來走過來
     doInteract(action);
     ctlSetAct(`和${b}說話`);
     ctlTalk();
@@ -1377,7 +1377,9 @@
     const s = slot(), enc = s.encounter, ev = enc && encEvent(enc);
     const sig = enc ? [enc.eid, enc.step, enc.pending, enc.done].join("|") : "";
     if (sig === ctl.talkSig && !el.hidden === !!enc) return;   // 沒變就不要重畫（按鈕才按得到）
+    const stepChanged = enc && !enc.pending && !enc.done && (ctl.talkSig || "").split("|").slice(0, 2).join("|") !== [enc.eid, enc.step].join("|");
     ctl.talkSig = sig;
+    if (stepChanged && enc.step === 0) lineEmote(enc);
     if (!enc || !ev) { el.hidden = true; return; }
     if (enc.pending) {
       const others = enc.cast.filter(x => x !== ctl.id);
@@ -2091,12 +2093,12 @@
     const w = wal(a), it = N.items[k]; if (!it || !w.bag[k]) return;
     bagAdd(w, k, -1); ctl.giveTo = null; sfx("gift");
     const tier = prefTier(b, k), L = [];
-    CT().ctlApproach && CT().ctlApproach(b);
     genSay(L, a, b, pk(GIVE_OPEN), a, b);
     L.push(["＊", `${a}把${it.icon}${it.name}遞給了${b}。`]);
     L.push(["＊", fillT(pk(N.voices[b].react), b, a)]);
     genSay(L, b, a, pk(GIFT_REACT[tier]), a, b);
     const TT = { love: "（好像是最喜歡的東西）", like: "（看起來很喜歡）", neutral: "", dislike: "（好像不太合口味……）" };
+    setTimeout(() => { emoteTo(a, "give"); setTimeout(() => emoteTo(b, tier === "love" ? "cheer" : tier === "dislike" ? "shrug" : "bow"), 1400); }, 700);
     startGen(`${a}送給${b}${it.name}${TT[tier]}`, L, [a, b], ctl.loc, computeDelta(a, b, "gift", true, GIFT_GAIN[tier]), `和${b}說話`);
   }
 
@@ -2193,8 +2195,9 @@
       s.assign[b] = { loc: go, untilAbs: stayFor(90), act: fillT(A.act, b, a) };
       after = fillT(A.act, a, b); moveSelf(a, go, after); loc = go;
     }
-    if (ctl && !go && CT().ctlApproach) CT().ctlApproach(b);
     startGen(title, L, [a, b], loc, computeDelta(a, b, id, true, A.gain), after);
+    const AE = { highfive: [[a, "high"], [b, "high"]], pat: [[a, "pat"]], shoulder: [[a, "pat"]], hug: [[a, "hug"], [b, "hug"]], feed: [[a, "give"]], photo: [[a, "wave"], [b, "cheer"]], hand: [[a, "give"]] }[id];
+    if (AE) setTimeout(() => AE.forEach(([x, n]) => emoteTo(x, n)), 900);
   }
 
   // ── 約會：選地點 ──
@@ -2547,6 +2550,25 @@
 
   /* ═════════ 抽屜／設定 ═════════ */
   const sfx = n => { if (N.sfx) N.sfx.play(n); };
+  /* 角色的動作：看目前這一句台詞，讓說話的人（或旁白提到的人）做對應的動作 */
+  const EMO_SAY = [[/哈哈|嘻嘻|呵呵|噗|笑死/, "laugh"], [/耶|太好了|好耶|萬歲|贏了|成功/, "cheer"], [/謝謝|謝了|多謝|辛苦了/, "bow"], [/^(嗨|你好|早安|午安|晚安|嘿|喲|哈囉)/, "wave"],
+    [/真的假的|什麼？|欸？|！？|嚇死|咦/, "surprise"], [/這個嘛|好像|為什麼|怎麼會|讓我想想|唔/, "think"], [/隨便|算了|誰知道|哼|無所謂/, "shrug"], [/^(嗯|好啊|好。|可以|沒問題|行啊|當然)/, "nod"]];
+  const EMO_NARR = [[/擊掌|give me five/i, "high", "all"], [/抱/, "hug", "all"], [/遞給|遞到|塞進.*手裡/, "give", "first"], [/摸.*頭|拍了拍|拍拍/, "pat", "first"],
+    [/贏了/, "cheer", "first"], [/鼓掌|拍手/, "clap", "all"], [/點了點頭|點頭/, "nod", "first"], [/鞠躬/, "bow", "first"], [/揮手|招手|揮了揮/, "wave", "first"],
+    [/聳肩|聳了聳/, "shrug", "first"], [/愣了|嚇了一跳|瞪大/, "surprise", "first"], [/笑/, "laugh", "first"], [/想了想|歪頭|托著下巴/, "think", "first"]];
+  function emoteTo(id, name) { try { if (N.room3d && N.room3d.emote) N.room3d.emote(id, name); if (N.town3d && N.town3d.emote) N.town3d.emote(id, name); } catch (e) { } }
+  function lineEmote(enc) {
+    const ev = enc && encEvent(enc), ln = ev && ev.lines && ev.lines[enc.step]; if (!ln) return;
+    const [who, text] = ln, cast = enc.cast || [];
+    if (who !== "＊" && cast.indexOf(who) >= 0) { const m = EMO_SAY.find(([re]) => re.test(text)); if (m) emoteTo(who, m[1]); return; }
+    const named = cast.filter(id => text.indexOf(id) >= 0).sort((a, b) => text.indexOf(a) - text.indexOf(b));
+    for (const [re, name, whom] of EMO_NARR) {
+      const k = text.search(re); if (k < 0) continue;
+      if (whom === "all") (named.length ? named : cast).forEach(id => emoteTo(id, name));
+      else { const before = named.filter(id => text.indexOf(id) < k); const id = before.length ? before[before.length - 1] : named[0]; if (id) emoteTo(id, name); }
+      return;
+    }
+  }
   function openSheet() { if ($("#sheet").hidden) sfx("open"); $("#sheet").hidden = false; $("#sheetBackdrop").hidden = false; $("#sheet").scrollTop = 0; }
   function closeSheet() { if (!$("#sheet").hidden) sfx("close"); $("#sheet").classList.remove("phone-mode"); $("#sheet").hidden = true; $("#sheetBackdrop").hidden = true; sheetState = null; }
   function confirmSheet(title, msg, okLabel, onOk) {

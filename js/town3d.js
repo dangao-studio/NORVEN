@@ -2842,11 +2842,11 @@
       w.g.position.set(w.pos.x, baseY + bob, w.pos.z);
       w.g.visible = !indoors && !(FP.on && TC && w.id === TC.id);
       if (w.ch) {
-        const want = walking ? (w.wantYaw || 0) : pose !== "stand" && w.destYaw != null ? w.destYaw : cam.az;
+        const want = walking ? (w.wantYaw || 0) : w.destYaw != null ? w.destYaw : w.yaw;   // 站著維持方向；說話時面向對方
         w.yaw = turnTo(w.yaw, want, Math.min(1, dt * (walking ? 10 : pose !== "stand" ? 12 : 3)));
         w.ch.root.rotation.y = w.yaw;
         w.ch.root.visible = w.fade > 0.3;
-        if (w.g.visible) w.ch.update(dt, tt, { walking, speed: w.manualWalk > 0 ? (shiftDown ? TRUN : TSPEED) : (w.speed || WALK), asleep: w.asleep, talking: talkingIds.has(id) });
+        if (w.g.visible) w.ch.update(dt, tt, { walking, speed: w.manualWalk > 0 ? (shiftDown ? TRUN : TSPEED) : (w.speed || WALK), asleep: w.asleep, talking: talkingIds.has(id) || ENC_TALK.has(id), act: walking ? null : w.actTag });
       } else {
         w.head.material.opacity = (w.asleep ? 0.6 : 1) * w.fade;
         w.body.visible = w.fade > 0.3;
@@ -3394,7 +3394,7 @@
       const p = RM.ppl[id];
       p.g.visible = !RM.edit;
       if (!p.pos) continue;
-      if (RM.ctl && RM.ctl.id === id) ctlStep(p, dt);
+      if (RM.ctl && RM.ctl.id === id) ctlStep(p, dt); else if (!RM.edit) roomWander(p, tt);
       while (p.path && p.path.length > 1 && p.pos.distanceTo(p.path[0]) < 0.03) p.path.shift();
       const tgt = p.path && p.path.length ? p.path[0] : p.dest;
       const d = tgt.clone().sub(p.pos); const len = d.length();
@@ -3405,10 +3405,11 @@
       if (pose !== p.pose) setRoomPose(p, pose);
       if (p.ch) {
         p.g.position.set(p.pos.x, pose === "stand" ? 0 : p.destY, p.pos.z);
-        const want = walking ? p.wantYaw : pose !== "stand" && p.destYaw != null ? p.destYaw : Math.PI / 4 + RM.az;
-        p.yaw = turnTo(p.yaw, want, Math.min(1, dt * (walking ? 10 : pose !== "stand" ? 12 : 3)));
+        // 站著沒事時維持原本的方向（不再一律轉向鏡頭）；說話時面向對方
+        const want = walking ? p.wantYaw : p.destYaw != null ? p.destYaw : p.yaw;
+        p.yaw = turnTo(p.yaw, want, Math.min(1, dt * (walking ? 10 : pose !== "stand" ? 12 : 5)));
         p.ch.root.rotation.y = p.yaw;
-        p.ch.update(dt, tt, { walking, asleep: p.asleep, talking: p.st.visible && !p.asleep });
+        p.ch.update(dt, tt, { walking, asleep: p.asleep, talking: p.st.visible && !p.asleep && !!(RM.lastState && RM.lastState.talking && RM.lastState.talking.has(id)), act: walking ? null : p.actTag });
       } else {
       const y = pose === "stand" ? (walking ? Math.abs(Math.sin(tt * 10 + p.phase)) * 0.06 : 0) : p.destY;
       p.g.position.set(p.pos.x, y + (pose === "stand" && !walking ? Math.sin(tt * 2 + p.phase) * 0.01 : 0), p.pos.z);
@@ -3548,27 +3549,34 @@
     fbtn.forEach(b => { const i = +b.dataset.rfloor, n = here.filter(id => floorOf(RM.loc, s.where[id]) === i).length; b.textContent = floorsOf(RM.loc)[i].name.split("・")[0] + (n ? ` · ${n}人` : ""); b.title = floorsOf(RM.loc)[i].name; b.className = i === RM.floor ? "on" : ""; });
     const cid = RM.ctl && RM.ctl.id;
     const ids = here.filter(id => id === cid || floorOf(RM.loc, s.where[id]) === RM.floor);
+    // 正在說話的人：站起來、圍在一起、面對彼此（不硬坐在原本的位置上）
+    const talkPos = roomTalkPos(ids, cid, s);
     // 操控中的人自己選位置：他佔的那個座位不分給別人
     const spotsFree = RM.spots.filter(sp => !(RM.ctl && RM.ctl.spot === sp));
-    const seats = spotsFree.length ? seatPeople({ spots: spotsFree }, ids.filter(id => id !== cid), s.where) : {};
-    const free = ids.filter(id => !seats[id]);
+    const seats = spotsFree.length ? seatPeople({ spots: spotsFree }, ids.filter(id => id !== cid && !talkPos[id]), s.where) : {};
+    const free = ids.filter(id => !seats[id] && !talkPos[id]);
     // 沒有家具可用的人：站在房間前半部
     const standAt = i => new T.Vector3(-RM.W / 2 + 0.7 + (i % 5) * ((RM.W - 1.4) / 4), 0, RM.D / 2 - 0.45 - Math.floor(i / 5) * 0.5);
     for (const id in RM.ppl) if (ids.indexOf(id) < 0) { RM.scene.remove(RM.ppl[id].g); delete RM.ppl[id]; }
     ids.forEach(id => {
       let p = RM.ppl[id];
-      const seat = seats[id], dest = seat ? new T.Vector3(seat.x, 0, seat.z) : standAt(free.indexOf(id));
-      if (!seat && RM.occ) { const f = nearestFree(...cellOf(dest)); dest.copy(posOf(f[0], f[1])); }
+      const seat = seats[id], tp = talkPos[id];
+      let dest = tp ? tp.pos.clone() : seat ? new T.Vector3(seat.x, 0, seat.z) : (p && p.wdest ? p.wdest.clone() : standAt(free.indexOf(id)));
+      if (!seat && !tp && RM.occ) { const f = nearestFree(...cellOf(dest)); dest = posOf(f[0], f[1]); }
       if (!p) { p = RM.ppl[id] = roomPerson(N.characters.find(c => c.id === id)); p.pos = dest.clone(); p.path = []; }
+      p.free = !seat && !tp; if (!p.free) p.wdest = null;
       if (id === cid) {   // 操控中：位置、姿勢都由玩家決定
         if (!p.ctlInit) { p.ctlInit = true; p.path = []; if (RM.occ) { const f = nearestFree(...cellOf(p.pos)); p.pos.copy(posOf(f[0], f[1])); } p.dest = p.pos.clone(); p.destPose = "stand"; p.destY = 0; p.destYaw = null; }
         p.zz.visible = false; p.asleep = false; p.st.visible = !!(s.talking && s.talking.has(id)); p.ring.visible = true;
+        const tk = Object.values(talkPos)[0];
+        if (tk) { p.destYaw = Math.atan2(tk.pos.x - p.pos.x, tk.pos.z - p.pos.z); p.talkFaced = true; } else if (p.talkFaced) { p.destYaw = null; p.talkFaced = false; }
         p.name.material.color.set(0xFFE2A8); return;
       }
       p.ctlInit = false;
       const dk = dest.x.toFixed(2) + "," + dest.z.toFixed(2);
       if (p.destKey !== dk) { p.destKey = dk; p.path = p.pos.distanceTo(dest) > 0.05 ? roomPath(p.pos, dest) : []; }
-      p.dest = dest; p.destPose = seat ? seat.pose : "stand"; p.destY = seat ? seat.y : 0; p.destYaw = seat ? seat.yaw : null;
+      p.dest = dest; p.destPose = seat ? seat.pose : "stand"; p.destY = seat ? seat.y : 0; p.destYaw = tp ? tp.yaw : seat ? seat.yaw : null;
+      p.actTag = seat ? seat.tag : null;
       const asleep = !s.where[id].avail;
       p.zz.visible = asleep; p.asleep = asleep;
       p.st.visible = !asleep && ((s.talking && s.talking.has(id)) || (s.hints && s.hints.has(id)));
@@ -3577,6 +3585,50 @@
       p.name.material.color.set(s.observing === id ? 0xFFE2A8 : 0xFFFFFF);
     });
   }
+  // 說話的人站在哪：以第一個（不是操控中的）說話的人現在的位置為中心，其他人圍在旁邊；同一段對話內位置不變
+  function roomTalkPos(ids, cid, s) {
+    const tset = s.talking || new Set(), talkers = ids.filter(id => tset.has(id) && s.where[id] && s.where[id].avail);
+    const others = talkers.filter(id => id !== cid);
+    if (talkers.length < 2 || !others.length || !RM.occ) { RM.talk = null; return {}; }
+    const key = talkers.join("|");
+    if (RM.talk && RM.talk.key === key) return RM.talk.pos;
+    // 操控中的人在說話：大家走過來圍著他；不然以第一個說話的人站的地方為中心
+    const cp0 = cid && talkers.includes(cid) && RM.ppl[cid];
+    const p0 = cp0 || RM.ppl[others[0]];
+    let anchor = p0 && p0.pos ? p0.pos.clone() : new T.Vector3(0, 0, 0.3);
+    { const f = nearestFree(...cellOf(anchor)); anchor = posOf(f[0], f[1]); }
+    const pos = cp0 ? {} : { [others[0]]: { pos: anchor } };
+    (cp0 ? others : others.slice(1)).forEach((id, j) => {
+      const q = RM.ppl[id];
+      let a = q && q.pos ? Math.atan2(q.pos.x - anchor.x, q.pos.z - anchor.z) : j * 2;
+      a += (j % 2 ? 1 : -1) * Math.ceil(j / 2) * 0.9;
+      let v = new T.Vector3(anchor.x + Math.sin(a) * 0.75, 0, anchor.z + Math.cos(a) * 0.75);
+      const f = nearestFree(...cellOf(v)); v = posOf(f[0], f[1]);
+      pos[id] = { pos: v };
+    });
+    // 面向其他說話的人的中間（操控中的人用他現在的位置）
+    const cp = cid && talkers.includes(cid) && RM.ppl[cid];
+    for (const id in pos) {
+      const me = pos[id].pos; let x = 0, z = 0, n = 0;
+      for (const o in pos) if (o !== id) { x += pos[o].pos.x; z += pos[o].pos.z; n++; }
+      if (cp) { x += anchor.x; z += anchor.z; n++; }
+      pos[id].yaw = n ? Math.atan2(x / n - me.x, z / n - me.z) : null;
+    }
+    RM.talk = { key, pos };
+    return pos;
+  }
+  // 沒有家具可用、也沒在說話的人：在房間裡隨便走走，停一陣子再換個地方
+  function roomWander(p, tt) {
+    if (!p.free || p.asleep || !RM.occ || tt < (p.wanderAt || 0)) return;
+    p.wanderAt = tt + 14 + Math.random() * 26;
+    for (let k = 0; k < 20; k++) {
+      const v = new T.Vector3((Math.random() - 0.5) * (RM.W - 1.2), 0, (Math.random() - 0.5) * (RM.D - 1.2));
+      const [cx, cz] = cellOf(v); if (occAt(cx, cz)) continue;
+      p.wdest = posOf(cx, cz); p.dest = p.wdest.clone(); p.destKey = null; p.path = roomPath(p.pos, p.dest); p.destYaw = null;
+      return;
+    }
+  }
+  function roomEmote(id, name) { const p = RM.ppl[id]; if (p && p.ch && p.ch.emote) p.ch.emote(name); }
   function floorsOf(id) { const e = N.interiors && N.interiors[id]; return !e ? [{ items: [] }] : Array.isArray(e) ? [{ items: e }] : e.floors || [e]; }
   function floorOf(locId, w) {
     const fl = floorsOf(locId); if (fl.length < 2) return 0;
@@ -3789,7 +3841,7 @@
   N.room3d = { supported, has: roomHas, mount: roomMount, update: roomUpdate, stop: roomStop, edit: editOpen, exportEdits, importEdits,
     _dbg: () => ({ RFP, RM }),
     fp: on => roomFPSet(on === undefined ? !(RFP.on || RFP.want) : on), isFP: () => RFP.on, aim: () => roomFPAim(), interact: () => roomFPInteract(), setBusy: fn => { RFP.busy = fn; },
-    control: ctlSet, ctlGo: (x, z) => ctlGo(new T.Vector3(x, 0, z)), ctlUseSpot, ctlMove, ctlScreen, ctlApproach, floors: () => floorsOf(RM.loc).length, setFloor: i => { if (RM.floor !== i) { RM.floor = i; buildRoom(RM.loc); floorUI(); const p = ctlPerson(); if (p) { p.ctlInit = false; if (RM.ctl) RM.ctl.spot = null; } if (RM.lastState) roomUpdate(RM.lastState); } }, curFloor: () => RM.floor };
+    emote: roomEmote, control: ctlSet, ctlGo: (x, z) => ctlGo(new T.Vector3(x, 0, z)), ctlUseSpot, ctlMove, ctlScreen, ctlApproach, floors: () => floorsOf(RM.loc).length, setFloor: i => { if (RM.floor !== i) { RM.floor = i; buildRoom(RM.loc); floorUI(); const p = ctlPerson(); if (p) { p.ctlInit = false; if (RM.ctl) RM.ctl.spot = null; } if (RM.lastState) roomUpdate(RM.lastState); } }, curFloor: () => RM.floor };
 
   /* ═════════ 對外 ═════════ */
   function resize() {
@@ -3828,6 +3880,34 @@
     else if (!running) { running = true; lastT = 0; raf = requestAnimationFrame(frame); }
   }
   let festKey = "";
+  const SIT_RE = /吃|喝|餐|茶|咖啡|點心|讀|書|看|寫|畫|休息|坐|發呆|曬太陽|野餐|聊|餵|等|歇/;
+  // 小鎮上說話的人：以第一個說話的人（操控中的人在場就以他）為中心圍成一圈、面向中間
+  function townTalkPos(loc, talkers, s) {
+    const out = {}; if (!talkers.length) return out;
+    const tc = TC && walkers[TC.id] && (s.talking || []).indexOf(TC.id) >= 0 ? walkers[TC.id] : null;
+    if (!tc && talkers.length < 2) return out;
+    const key = loc + "|" + talkers.join("|") + (tc ? "|tc" : "");
+    if (TALK[loc] && TALK[loc].key === key) return TALK[loc].pos;
+    const a0 = tc ? tc.pos.clone() : (walkers[talkers[0]].dest || walkers[talkers[0]].pos).clone();
+    const n = talkers.length + (tc ? 1 : 0), r = n > 2 ? 1.0 : 0.85;
+    const cen = tc ? a0 : a0.clone();
+    talkers.forEach((id, i) => {
+      if (!tc && i === 0) { out[id] = { pos: a0.clone() }; return; }
+      const w = walkers[id], j = tc ? i : i - 1;
+      let a = Math.atan2(w.pos.x - a0.x, w.pos.z - a0.z) + (j % 2 ? 1 : -1) * Math.ceil(j / 2) * 0.8;
+      out[id] = { pos: new T.Vector3(a0.x + Math.sin(a) * r, 0, a0.z + Math.cos(a) * r) };
+    });
+    for (const id in out) {
+      const me = out[id].pos; let x = 0, z = 0, k = 0;
+      for (const o in out) if (o !== id) { x += out[o].pos.x; z += out[o].pos.z; k++; }
+      if (tc) { x += cen.x; z += cen.z; k++; }
+      out[id].yaw = k ? Math.atan2(x / k - me.x, z / k - me.z) : null;
+    }
+    TALK[loc] = { key, pos: out };
+    return out;
+  }
+  const TALK = {}; let ENC_TALK = new Set();
+  function townEmote(id, name) { const w = walkers[id]; if (w && w.ch && w.ch.emote) w.ch.emote(name); }
   function update(s) {
     if (!built) return;
     state = s;
@@ -3855,15 +3935,21 @@
         L.badgeN = n;
       }
     }
+    const tset = new Set(s.talking || []); ENC_TALK = tset; const bucket = Math.floor(Date.now() / 40000);
     for (const loc in groups) {
       const ids = groups[loc].filter(id => !(TC && TC.id === id)), L0 = lots[loc];   // 操控中的人自己走
-      // 戶外平台：照平台上的長椅、椅子坐下（跟房間畫面同一套座位）
+      // 戶外平台：只有在吃東西、讀書、休息、聊天的人才坐下（跟房間畫面同一套座位）；其他人站著，隔一陣子換個地方站
       const seatList = L0 && L0.plat ? L0.plat.spots.filter(sp => sp.pose === "sit") : [], off = hashStr(loc) % Math.max(1, seatList.length);
+      const stands = L0 && L0.plat ? L0.plat.stand : [];
+      const talkers = ids.filter(id => tset.has(id) && s.where[id].avail), talk = townTalkPos(loc, talkers, s);
+      let si = 0;
       ids.forEach((id, i0) => {
-        const seat = i0 < seatList.length ? seatList[(off + i0) % seatList.length] : null;
-        const sti = i0 - seatList.length, st = !seat && L0 && L0.plat && L0.plat.stand[sti];
-        const wk = walkers[id], dest = seat ? new T.Vector3(seat.x, 0, seat.z) : st ? new T.Vector3(st[0], 0, st[1]) : spotFor(loc, i0, ids.length);
-        wk.destPose = seat ? seat.pose : "stand"; wk.destY = seat ? seat.y : 0; wk.destYaw = seat ? seat.yaw : null;
+        const tp = talk[id], sitter = !tp && s.where[id].avail && SIT_RE.test(s.where[id].act || "");
+        const seat = sitter && si < seatList.length ? seatList[(off + si++) % seatList.length] : null;
+        const st = !seat && !tp && stands.length ? stands[(hashStr(id) + bucket * 7 + i0 * 3) % stands.length] : null;
+        const wk = walkers[id], dest = tp ? tp.pos.clone() : seat ? new T.Vector3(seat.x, 0, seat.z) : st ? new T.Vector3(st[0], 0, st[1]) : spotFor(loc, i0, ids.length);
+        wk.destPose = seat ? seat.pose : "stand"; wk.destY = seat ? seat.y : 0; wk.destYaw = tp ? tp.yaw : seat ? seat.yaw : null;
+        wk.actTag = seat ? seat.tag : null;
         wk.asleep = !s.where[id].avail && !early[id];
         if (firstPlace || !wk.loc) { wk.pos.copy(dest); wk.g.position.copy(dest); wk.loc = loc; wk.path = []; wk.dest = dest; return; }
         if (wk.loc !== loc) {
@@ -4183,7 +4269,7 @@
   }
   const tCtl = {
     control: tControl, ctlGo: tGo, ctlMove: (vx, vz) => { if (TC) { TC.vx = vx; TC.vz = vz; } },
-    ctlUseSpot: opt => tGo(new T.Vector3(opt.spot.x, 0, opt.spot.z), opt.spot), ctlApproach: tApproach, ctlScreen: tScreen,
+    ctlUseSpot: opt => tGo(new T.Vector3(opt.spot.x, 0, opt.spot.z), opt.spot), ctlApproach: tApproach, ctlScreen: tScreen, emote: townEmote,
     isOutdoor: id => !!(lots[id] && lots[id].plat), doorPos: id => { const L = lots[id]; if (!L) return null; return L.type === "lake" ? new T.Vector3(L.x, 0, L.z + 1.6) : L.plat ? null : doorOf(id) && doorOf(id).add(new T.Vector3(0, 0, 0.6)); }
   };
 
@@ -4379,6 +4465,6 @@
   };
 
   N.town3d_debug = () => ({ scene, wPath, routeTo, cars, roadNet: () => roadNet, groundAt, COAST, walkGrid, alleyOf, ENTR, camera, FP, GRID, cam, TC, WG, walkers, lots, RM, occAt, cellOf, roomPath, buildRoom });
-  N.town3d = { rotate: a => { cam.fly = null; const a0 = cam.az, t0 = performance.now(); const step = () => { const k = Math.min(1, (performance.now() - t0) / 350); cam.az = a0 + a * (1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); }; step(); }, setAnomaly, supported, mount, unmount, update, say, focus, flyRegion, flyLoc, setLabels, setXray, setDirector, home, pause,
+  N.town3d = { rotate: a => { cam.fly = null; const a0 = cam.az, t0 = performance.now(); const step = () => { const k = Math.min(1, (performance.now() - t0) / 350); cam.az = a0 + a * (1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); }; step(); }, setAnomaly, supported, mount, unmount, update, say, emote: townEmote, focus, flyRegion, flyLoc, setLabels, setXray, setDirector, home, pause,
     isFollowing: () => cam.follow, isReady: () => built, ctl: tCtl };
 })();
