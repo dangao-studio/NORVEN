@@ -38,7 +38,7 @@
   function quality() {
     let q = "auto"; try { q = localStorage.getItem("novum-quality") || "auto"; } catch (e) { }
     if (q === "high" || q === "low" || q === "mobile") return q;
-    return window.matchMedia && matchMedia("(pointer:fine)").matches && Math.max(screen.width, screen.height) >= 1000 ? "high" : "low";   // 手機不顯示 3D 小鎮，房間用一般畫質
+    return window.matchMedia && matchMedia("(pointer:fine)").matches && Math.max(screen.width, screen.height) >= 1000 ? "high" : "low";   // 手機（要在小鎮頁切到 3D 才會開）：簡化小鎮，房間用一般畫質
   }
   // HQ：用城市建築（電腦高畫質、手機城市都是）；MQ：手機城市（同樣的建築和夜景，但範圍小、光源少、後製簡單）
   const MQ = () => !!N.voxCity && quality() === "mobile";
@@ -2660,7 +2660,9 @@
     // 城的形狀不規則：用輪廓比例 rb 來限制（往海那邊可以多看一點）
     const q = GRID.rb(cam.target.x, cam.target.z), lim = cam.target.x < GRID.cx ? 1.18 : 0.98;
     if (q > lim) { const k = lim / q; cam.target.x = GRID.cx + (cam.target.x - GRID.cx) * k; cam.target.z = GRID.cz + (cam.target.z - GRID.cz) * k; }
-    cam.dist = Math.max(5, Math.min(MQ() ? 75 : HQ() ? 105 : 120, cam.dist));
+    // 手機（觸控）看小鎮時不能拉得太近：一捏就會貼到路燈上；操控居民時照原本的距離
+    const minD = TC || (window.matchMedia && matchMedia("(pointer:fine)").matches) ? 5 : 16;
+    cam.dist = Math.max(minD, Math.min(MQ() ? 75 : HQ() ? 105 : 120, cam.dist));
   }
   let interacting = 0;
   function bindInput(el) {
@@ -2713,7 +2715,10 @@
         const cur = pinchInfo();
         cam.dist *= prevPinch.d / Math.max(1, cur.d);
         cam.az -= (cur.ang - prevPinch.ang);
-        pan((cur.mx - prevPinch.mx) * 0.5, (cur.my - prevPinch.my) * 0.5);
+        // 雙指一起上下滑＝調整俯視角度（像地圖 App）；左右滑＝平移
+        const dmx = cur.mx - prevPinch.mx, dmy = cur.my - prevPinch.my;
+        cam.polar = Math.max(0.35, Math.min(HQ() ? 1.5 : 1.25, cam.polar - dmy * 0.005));
+        pan(dmx * 0.5, 0); cam.follow = null; cam.fly = null;
         moved = 99; prevPinch = cur; clampTarget();
       }
     });
@@ -4466,5 +4471,5 @@
 
   N.town3d_debug = () => ({ scene, wPath, routeTo, cars, roadNet: () => roadNet, groundAt, COAST, walkGrid, alleyOf, ENTR, camera, FP, GRID, cam, TC, WG, walkers, lots, RM, occAt, cellOf, roomPath, buildRoom });
   N.town3d = { rotate: a => { cam.fly = null; const a0 = cam.az, t0 = performance.now(); const step = () => { const k = Math.min(1, (performance.now() - t0) / 350); cam.az = a0 + a * (1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); }; step(); }, setAnomaly, supported, mount, unmount, update, say, emote: townEmote, focus, flyRegion, flyLoc, setLabels, setXray, setDirector, home, pause,
-    isFollowing: () => cam.follow, isReady: () => built, ctl: tCtl };
+    isFollowing: () => cam.follow, unfollow: () => { cam.follow = null; }, isReady: () => built, ctl: tCtl };
 })();

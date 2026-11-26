@@ -583,6 +583,22 @@ html.dark .paper { background: #22252F; }
 .t3d-tools { top: 10px; right: 10px; flex-direction: column; }
 .t3d-tools button { font-size: 18px; }
 .t3d-tools button.on { background: var(--brass-soft); color: var(--brass); }
+/* 手機：右側按鈕收成 ⋯，另外有全螢幕 */
+.t3d-tools .t3d-phone { display: none; }
+@media (pointer: coarse) {
+  .t3d-tools .t3d-phone { display: block; }
+  .t3d-tools:not(.open) button:not(.t3d-phone) { display: none; }
+  .t3d-tools.open #t3dMore { background: var(--brass-soft); color: var(--brass); }
+}
+body.t3d-full { overflow: hidden; }
+body.t3d-full .t3d { position: fixed; inset: 0; z-index: 55; height: auto; min-height: 0; max-height: none; border-radius: 0; }
+body.t3d-full .t3d-speed { top: calc(env(safe-area-inset-top) + 10px); }
+body.t3d-full .t3d-tools { top: calc(env(safe-area-inset-top) + 10px); }
+body.t3d-full .t3d-regions { bottom: calc(env(safe-area-inset-bottom) + 12px); }
+.t3d-follow { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 2px 2px 2px 14px; border-radius: 999px; background: rgba(22,20,28,.72); color: #F4EEE4; font-size: 13px; font-weight: 700; white-space: nowrap; }
+body.t3d-full .t3d-follow { top: calc(env(safe-area-inset-top) + 64px); }
+.t3d-follow button { min-width: 44px; min-height: 40px; border: 0; border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 15px; cursor: pointer; }
+body.watching .t3d-follow { display: none !important; }
 .t3d-regions { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 6px; justify-content: center; pointer-events: none; }
 .t3d-regions button { pointer-events: auto; min-height: 44px; padding: 0 14px; border: 0; border-radius: 22px; font: inherit; font-weight: 800; font-size: 14px; background: color-mix(in srgb, var(--card) 88%, transparent); color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,.14); cursor: pointer; }
 .t3d-card { position: absolute; left: 10px; right: 10px; bottom: 64px; background: var(--card); border-radius: 18px; padding: 14px 14px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.25); animation: card3dIn .22s ease-out; }

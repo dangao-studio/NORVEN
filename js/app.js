@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.23.1";
+  const VERSION = "3.24.0";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -340,7 +340,7 @@
   if (view === "observe" && !slot().observing) view = "town";
   function nav(v) {
     if (watching) exitWatch();
-    if (view === "town" && v !== "town" && N.town3d) { N.town3d.unmount(); card3d = null; }
+    if (view === "town" && v !== "town" && N.town3d) { N.town3d.unmount(); card3d = null; document.body.classList.remove("t3d-full"); }
     view = v; store.ui.view = v; save();
     closeSheet();
     render();
@@ -395,8 +395,10 @@
   let townSig = "";
   // 手機（觸控、小螢幕）不顯示 3D 小鎮，只用街區圖；房間的 3D 畫面照常
   const isPhone = () => !(window.matchMedia && matchMedia("(pointer:fine)").matches && Math.max(screen.width, screen.height) >= 1000);
-  const use3d = () => !isPhone() && store.ui.town3d !== false && N.town3d && N.town3d.supported() && !fail3d;
-  let fail3d = false, card3d = null;
+  // 手機預設看街區圖（3D 小鎮比較耗電、吃記憶體），切到「3D 小鎮」後才開；電腦預設就是 3D
+  const want3d = () => isPhone() ? store.ui.town3dPhone === true : store.ui.town3d !== false;
+  const use3d = () => want3d() && N.town3d && N.town3d.supported() && !fail3d;
+  let fail3d = false, card3d = null, followTick = 0;
   function townTopHTML(c) {
     const tf = todayFests(c);
     return `<div class="town-top">
@@ -404,10 +406,10 @@
         <button type="button" class="btn primary party-btn" id="partyBtn">🎉 發起聚會</button>
       </div>
       ${radioHTML()}
-      ${isPhone() ? "" : `<div class="seg view-switch" role="tablist" aria-label="小鎮顯示方式">
+      ${N.town3d && N.town3d.supported() ? `<div class="seg view-switch" role="tablist" aria-label="小鎮顯示方式">
         <button type="button" data-view3d="1" class="${use3d() ? "on" : ""}">🧊 3D 小鎮</button>
         <button type="button" data-view3d="0" class="${use3d() ? "" : "on"}">🗺️ 街區圖</button>
-      </div>`}`;
+      </div>` : ""}`;
   }
   /* ═════════ 諾文電台：小鎮頁上的音樂播放器（歌單隨機播放、或跟著地點換曲） ═════════ */
   function radioHTML() {
@@ -479,6 +481,8 @@
           <button type="button" id="plus1h" aria-label="快轉一小時">+1h</button>
         </div>
         <div class="t3d-hud t3d-tools">
+          <button type="button" id="t3dFull" class="t3d-phone" aria-label="全螢幕看小鎮" aria-pressed="false">⛶</button>
+          <button type="button" id="t3dMore" class="t3d-phone" aria-label="更多鏡頭按鈕" aria-expanded="false">⋯</button>
           <button type="button" id="t3dHome" aria-label="回到全景">🏠</button>
           <button type="button" id="t3dLabels" class="${store.ui.labels3d !== false ? "on" : ""}" aria-label="顯示地名">🏷️</button>
           <button type="button" id="t3dFollow" aria-label="鏡頭跟著居民">📍</button>
@@ -487,8 +491,17 @@
           <button type="button" data-rot3d="-1" aria-label="向右轉" title="向右轉（E）">⟳</button>
         </div>
         <div class="t3d-regions">${N.regions.map(r => `<button type="button" data-fly="${r.id}">${r.name}</button>`).join("")}</div>
+        <div class="t3d-follow" id="t3dFollowChip" hidden><span></span><button type="button" id="t3dUnfollow" aria-label="鏡頭不要再跟著">✕</button></div>
         <div class="t3d-card" id="t3dCard" hidden></div>
       </div>`;
+    document.body.classList.remove("t3d-full");
+    // 鏡頭在跟著誰：上方小標籤，點 ✕ 放開
+    clearInterval(followTick);
+    followTick = setInterval(() => {
+      const chip = $("#t3dFollowChip"); if (!chip) { clearInterval(followTick); return; }
+      const id = N.town3d.isReady() ? N.town3d.isFollowing() : null;
+      chip.hidden = !id; if (id) chip.firstChild.textContent = "鏡頭跟著" + id;
+    }, 500);
     const box = $("#t3d");
     const onProgress = (p, label) => {
       if (N.splash && N.splash.active()) N.splash.progress(0.08 + p * 0.92, label);
@@ -1222,7 +1235,7 @@
   // 進到某個地點的房間
   // 操控中用哪一套：戶外在小鎮上（town3d.ctl），室內在房間（room3d）
   const CT = () => ctl && ctl.mode === "town" ? N.town3d.ctl : N.room3d;
-  const canTown = () => !isPhone() && N.town3d && N.town3d.ctl && N.town3d.supported() && !fail3d;
+  const canTown = () => want3d() && N.town3d && N.town3d.ctl && N.town3d.supported() && !fail3d;
   const TOWN_HOOKS = {
     onPerson: (b, x, y) => ctlPersonRing(b, x, y),
     onSpot: (opts, x, y) => CTL_HOOKS.onSpot(opts, x, y),
@@ -2619,9 +2632,9 @@
         <h4>介面顏色</h4>
         <div class="seg seg-grid">${[["town", "🕰️ 跟著小鎮時間"], ["system", "📱 跟著手機"], ["light", "☀️ 白天"], ["dark", "🌙 夜晚"]].map(([v, t]) => `<button type="button" data-theme="${v}" class="${(store.ui.theme || "town") === v ? "on" : ""}">${t}</button>`).join("")}</div>
       </section>
-      <section ${isPhone() ? "hidden" : ""}>
+      <section>
         <h4>3D 畫質</h4>
-        <p class="muted" style="margin:0 0 8px">高畫質是完整的城市、光影和夜景；輕量城市是同樣的建築和夜景，範圍小一點、光影簡單一點（電腦比較舊時用）；簡化小鎮是最早的方塊小鎮。手機只顯示街區圖。換了之後會重新載入。</p>
+        <p class="muted" style="margin:0 0 8px">高畫質是完整的城市、光影和夜景；輕量城市是同樣的建築和夜景，範圍小一點、光影簡單一點（電腦比較舊時用）；簡化小鎮是最早的方塊小鎮。自動：電腦用高畫質，手機用簡化小鎮（比較省電、不容易因為記憶體不夠被關掉）。手機想看完整街景可以選輕量城市。換了之後會重新載入。</p>
         <div class="seg">${[["auto", "🪄 自動"], ["high", "✨ 高畫質"], ["mobile", "🏙️ 輕量城市"], ["low", "🧊 簡化小鎮"]].map(([v, t]) => { let q = "auto"; try { q = localStorage.getItem("novum-quality") || "auto"; } catch (e) { } return `<button type="button" data-quality="${v}" class="${q === v ? "on" : ""}">${t}</button>`; }).join("")}</div>
       </section>
       <section>
@@ -2802,8 +2815,11 @@
     if (t.id === "settingsBtn" || t.id === "clockChip") return openSettings();
     if (d.speed !== undefined) { setSpeed(+d.speed); if (sheetState && sheetState.type === "settings") renderSettings(); return; }
     if (t.id === "plus1h") { if (store.mode !== "preview") setSpeed(store.preview.speed || 1); const c = clockNow(); const m = c.min + 60; setPreview(c.dow + Math.floor(m / 1440), m, 60); lastMinute = -1; tick(); return toast("小鎮時間 +1 小時"); }
-    if (d.view3d !== undefined) { store.ui.town3d = d.view3d === "1"; save(); if (!store.ui.town3d && N.town3d) N.town3d.unmount(); return render(); }
+    if (d.view3d !== undefined) { document.body.classList.remove("t3d-full"); const on = d.view3d === "1"; if (isPhone()) store.ui.town3dPhone = on; else store.ui.town3d = on; save(); if (!on && N.town3d) N.town3d.unmount(); return render(); }
     if (d.fly) { if (N.town3d) N.town3d.flyRegion(d.fly); store.ui.region = d.fly; return; }
+    if (t.id === "t3dFull") { const on = document.body.classList.toggle("t3d-full"); t.setAttribute("aria-pressed", on); t.textContent = on ? "✕" : "⛶"; t.setAttribute("aria-label", on ? "離開全螢幕" : "全螢幕看小鎮"); return; }
+    if (t.id === "t3dMore") { const tools = t.closest(".t3d-tools"), on = tools.classList.toggle("open"); t.setAttribute("aria-expanded", on); return; }
+    if (t.id === "t3dUnfollow") { N.town3d.unfollow(); $("#t3dFollowChip").hidden = true; return; }
     if (t.id === "t3dHome") { N.town3d.home(); hideCard3d(); return; }
     if (d.rot3d) { N.town3d.rotate(+d.rot3d * Math.PI / 4); return; }
     if (t.id === "t3dLabels") { store.ui.labels3d = store.ui.labels3d === false; N.town3d.setLabels(store.ui.labels3d !== false); t.classList.toggle("on", store.ui.labels3d !== false); save(); return; }
