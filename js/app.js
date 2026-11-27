@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.25.0";
+  const VERSION = "3.26.0";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -469,7 +469,8 @@
       for (const id in w2) if (!ahead[id] && where[id] && w2[id] && w2[id].loc !== where[id].loc) ahead[id] = { loc: w2[id].loc, in: k };
     }
     return { min: c.min, weather: c.weather, where, ahead, rate, hints: hintSet(c, where), observing: s.observing, fests: tf, partyLoc: s.encounter && s.encounter.party ? s.encounter.loc : null,
-      talking: s.encounter && !s.encounter.done && !s.encounter.pending ? s.encounter.cast.slice() : [] };
+      talking: s.encounter && !s.encounter.done && !s.encounter.pending ? s.encounter.cast.slice() : [],
+      wishes: N.mood ? new Set(N.mood.pending(c, where).keys()) : null };
   }
   function renderTown3d(el, c) {
     const sp = store.preview, live = store.mode === "preview";
@@ -524,10 +525,11 @@
     const c = clockNow(), w = currentWhere(c)[id], x = ch(id), s = slot();
     const comp = N.characters.filter(o => o.id !== id && currentWhere(c)[o.id].loc === w.loc && currentWhere(c)[o.id].avail).map(o => o.id);
     el.innerHTML = `<button type="button" class="card3d-x" id="card3dClose" aria-label="關閉">✕</button>
-      <div class="card3d-head">${person(id, 46)}<div><b>${esc(id)}</b><small>${esc(x.role)}</small></div></div>
+      <div class="card3d-head">${person(id, 46)}<div><b>${esc(id)}</b>${N.mood ? N.mood.moodChip(id, c) : ""}<small>${esc(x.role)}</small></div></div>
       <div class="card3d-where"><b>${esc(locName(w.loc))}</b>・${esc(w.act)}${w.avail ? "" : `<span class="tag rest">休息中</span>`}</div>
       ${comp.length ? `<div class="card3d-with">${comp.map(o => person(o, 20)).join("")}<span>和${esc(comp.join("、"))}在一起</span></div>` : ""}
       <div class="card3d-act">
+        ${N.mood ? N.mood.buttonHTML(id, c) : ""}
         <button type="button" class="btn primary" data-observe="${esc(id)}">${s.observing === id ? "回到觀察" : "👀 觀察"}</button>
         <button type="button" class="btn soft" data-follow3d="${esc(id)}">📍 跟著看</button>
         ${w.avail && N.interiors && N.interiors[w.loc] ? `<button type="button" class="btn soft" data-ctlstart="${esc(id)}">🎮 操控</button>` : ""}
@@ -693,11 +695,12 @@
   function renderResidents(el, c) {
     const where = currentWhere(c), s = slot(), hints = hintSet(c, where);
     el.innerHTML = `<h2 class="view-title">居民</h2>
+      ${N.mood ? N.mood.bannerHTML(c, where) : ""}
       <div class="res-list">${N.characters.map(x => {
         const w = where[x.id];
         return `<button type="button" class="res-card" data-observe="${esc(x.id)}">
           ${person(x.id, 44)}
-          <span class="res-name">${esc(x.full)}${s.observing === x.id ? `<span class="obs-badge">觀察中</span>` : ""}${hints.has(x.id) ? `<span class="tag hint">💬 可能有相遇</span>` : ""}</span>
+          <span class="res-name">${esc(x.full)}${s.observing === x.id ? `<span class="obs-badge">觀察中</span>` : ""}${hints.has(x.id) ? `<span class="tag hint">💬 可能有相遇</span>` : ""}${N.mood ? N.mood.moodChip(x.id, c, where) : ""}</span>
           <span class="res-role">${esc(x.role)}</span>
           <span class="res-where"><b>${esc(locName(w.loc))}</b>・${esc(w.act)}${w.avail ? "" : ` <span class="tag rest">休息中</span>`}</span>
         </button>`;
@@ -807,11 +810,12 @@
     el.innerHTML = `
       <div class="card obs-head">
         ${person(x.id, 56)}
-        <div class="obs-name">${esc(x.full)}</div>
+        <div class="obs-name">${esc(x.full)}${N.mood ? N.mood.moodChip(x.id, c, where) : ""}</div>
         <div class="obs-role">${esc(x.role)}</div>
         <div class="obs-where" id="obsWhere">${enc && ev && !pend ? `<b>${esc(locName(enc.loc))}</b>・正在和人說話` : whereHTML(w)}</div>
         ${N.life ? N.life.carryHTML(x.id) : ""}
         <div class="obs-tools">
+          ${N.mood && !busy ? N.mood.buttonHTML(x.id, c, where) : ""}
           <button type="button" class="btn soft" id="assignBtn" ${busy ? "disabled" : ""}>🧭 指派去…</button>
           <button type="button" class="btn soft" id="interactBtn" ${busy ? "disabled" : ""}>💬 找人互動</button>
           <button type="button" class="btn soft" id="phoneBtn">📱 偷看手機</button>
@@ -854,7 +858,7 @@
   function whereHTML(w) {
     let t = `<b>${esc(locName(w.loc))}</b>・${esc(w.act)}`;
     const left = Math.ceil(((w.until || 0) - Date.now()) / 60000);
-    if (w.assigned && left < 100000) t += ` <span class="tag asg">還會待 ${Math.max(1, left)} 分</span>`;
+    if (w.assigned && left < 10000) t += ` <span class="tag asg">還會待 ${Math.max(1, left)} 分</span>`;
     return t;
   }
   function statusHTML(s, x, w, others) {
@@ -1786,7 +1790,7 @@
     s.news.unshift(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), at: Date.now(), dow: c.dow, min: c.min, day: dayKeyOf(c) }, n));
     if (s.news.length > 80) s.news.length = 80;
     save();
-    showBanner(n);
+    if (!n.quiet) showBanner(n);
     renderBell();
   }
   let bannerTimer = null;
@@ -1875,7 +1879,7 @@
     sheetState = { type: "news" };
     const list = s.news || [];
     $("#sheetBody").innerHTML = `<h3>🔔 小鎮動態</h3>
-      ${list.length ? `<ul class="news-list">${list.map(n => `<li><button type="button" class="news-row ${n.at > (s.newsRead || 0) ? "unread" : ""}" data-observe="${esc(n.cast[0])}">
+      ${list.length ? `<ul class="news-list">${list.map(n => `<li><button type="button" class="news-row ${n.at > (s.newsRead || 0) ? "unread" : ""}" ${n.wish ? `data-wishopen="${esc(n.wish)}"` : `data-observe="${esc(n.cast[0])}"`}>
         <span class="news-time">週${E.WEEK[n.dow]} ${E.fmtMin(n.min)}</span>
         <span class="news-text">${esc(n.text)}</span>${n.quote ? `<span class="news-q">${esc(n.quote)}</span>` : ""}
         <span class="news-cast">${n.cast.map(x => person(x, 20)).join("")}</span></button></li>`).join("")}</ul>`
@@ -2425,10 +2429,12 @@
         <button type="button" data-logtab="diary" class="${tab === "diary" ? "on" : ""}">📓 日記</button>
         <button type="button" data-logtab="gossip" class="${tab === "gossip" ? "on" : ""}">💭 八卦</button>
         <button type="button" data-logtab="items" class="${tab === "items" ? "on" : ""}">🎁 物品</button>
+        ${N.mood ? `<button type="button" data-logtab="wish" class="${tab === "wish" ? "on" : ""}">💭 心事</button>` : ""}
       </div>
       <div id="logInner"></div>`;
     if (tab === "gossip") $("#logInner").innerHTML = N.life.gossipHTML();
     else if (tab === "items") $("#logInner").innerHTML = N.life.itemsHTML();
+    else if (tab === "wish" && N.mood) $("#logInner").innerHTML = N.mood.logHTML();
     else if (tab === "mine") renderMine(); else if (tab === "paper") renderPaper(); else if (tab === "diary") renderDiary(); else renderDex();
   }
   function filterChips(attr, cur) {
@@ -2463,6 +2469,8 @@
       else cat = "alone";
       const arr = T0[cat] || T0.who;
       let line = arr[Math.floor(r() * arr.length)];
+      const wishNote = N.mood ? N.mood.diaryNote(id, ck) : "";
+      if (wishNote) { out[id] = wishNote; continue; }
       const lifeNote = N.life ? N.life.diaryNote(id, ck) : "";
       if (lifeNote && r() < 0.6) { out[id] = lifeNote; continue; }
       const whoName = cat === "love" ? lover : who || "";
@@ -2640,6 +2648,7 @@
       </section>
       <section>
         <h4>居民的自主行動</h4>
+        <button type="button" class="mode-opt tog ${store.wishes !== false ? "on" : ""}" id="wishToggle" aria-pressed="${store.wishes !== false}"><b>居民會冒出 💭 來找你說心事</b><span>白天偶爾有人想跟你商量點小事，你的回應會變成他今天的心情和日記。</span>${swHTML(store.wishes !== false)}</button>
         <button type="button" class="mode-opt tog ${store.needs !== false ? "on" : ""}" id="needsToggle" aria-pressed="${store.needs !== false}"><b>肚子餓、累了、無聊時自己跑去別處</b>${swHTML(store.needs !== false)}</button>
       </section>
       <section>
@@ -2761,6 +2770,8 @@
     if (d.region) { store.ui.region = d.region; save(); return render(); }
     if (d.page !== undefined && t.closest(".page-tabs")) { store.ui.page[store.ui.region] = +d.page; save(); return render(); }
     if (d.loc) return openLocation(d.loc);
+    if (d.wishopen && N.mood) { if (N.mood.pending(clockNow()).has(d.wishopen)) { hideCard3d(); return N.mood.open(d.wishopen); } closeSheet(); return startObserve(d.wishopen); }
+    if (d.wishpick !== undefined && N.mood) return N.mood.pick(+d.wishpick);
     if (d.observe) { closeSheet(); return startObserve(d.observe); }
     if (d.close !== undefined) return closeSheet();
     if (t.id === "obsPill") return nav("observe");
@@ -2888,6 +2899,7 @@
     if (d.pace) { store.pace = d.pace; save(true); return renderSettings(); }
     if (d.theme) { store.ui.theme = d.theme; save(true); applyTheme(); return renderSettings(); }
     if (d.quality) { try { localStorage.setItem("novum-quality", d.quality); } catch (e) { } save(true); return location.reload(); }
+    if (t.id === "wishToggle") { store.wishes = store.wishes === false; save(true); render(); return renderSettings(); }
     if (t.id === "needsToggle") { store.needs = store.needs === false; save(true); render(); return renderSettings(); }
     if (t.id === "sfxBtn") { store.ui.sfx = store.ui.sfx === false; if (N.sfx) { N.sfx.setOn(store.ui.sfx); sfx("toggle"); } save(); return renderSettings(); }
     if (t.id === "musicBtn2") { const on = N.lofi.toggle(); store.ui.music = !!on; save(); updateMusicBtn(); return renderSettings(); }
@@ -2981,7 +2993,7 @@
     }
     if (ctl) ctlTick();
     if (document.visibilityState === "visible") {
-      updatePlans(); genNews(c); ensureDiary(c); lifeSync(c);
+      updatePlans(); genNews(c); ensureDiary(c); lifeSync(c); if (N.mood) N.mood.tick(c);
       if (view === "town" && use3d() && N.town3d.isReady() && $("#t3d")) {
         N.town3d.update(state3d(c));
         if (card3d && !$("#t3dCard").hidden && c.min !== lastCardMin) { lastCardMin = c.min; showCard3d(card3d); }
@@ -3021,6 +3033,11 @@
   if (N.life) N.life.init({ slot, save, clockNow, clockAtAbs, whereAt, currentWhere, getRel, setRel, locName, rng, pairSummary, dayKeyOf, esc, person,
     slotSeed: () => store.mode, pace: () => store.pace || "normal", BUSY, loveEligible, stageOf, baseRel, chatKeyWith, pushNews,
     addMsgs: (cid, ck, msgs) => { const s = slot(); s.phone = s.phone || {}; const L0 = s.phone[cid] = s.phone[cid] || []; msgs.forEach((m, i) => L0.push({ dow: ck.dow, min: Math.min(1439, ck.min + i), m })); if (L0.length > 120) L0.splice(0, L0.length - 120); } });
+  if (N.mood) N.mood.init({ slot, save, clockNow, currentWhere, needs: autoNeeds, getRel, rng, dayKeyOf, esc, person, pushNews,
+    enabled: () => store.wishes !== false,
+    bump: (a, b, amt) => { const r = Object.assign({}, getRel(a, b)); r.pts = Math.min(r.route || r.status ? 100 : 84, r.pts + amt); setRel(a, b, r); },
+    sheet: (st, html) => { const was = !$("#sheet").hidden && sheetState && sheetState.type === "wish"; sheetState = st; $("#sheetBody").innerHTML = html; if (was) $("#sheet").scrollTop = $("#sheet").scrollHeight; else openSheet(); },
+    after: () => { if (view === "residents" || view === "observe") { const y = window.scrollY; render(); window.scrollTo(0, y); } } });
   // 啟動
   (function boot() {
     // 舊進度裡若有不符合規則的戀愛線（例如未成年角色），一律改回朋友關係

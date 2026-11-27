@@ -2,7 +2,7 @@
 
 這是一個手機優先的「小鎮觀察」網頁 App（PWA）。世界觀與 16 位角色是使用者的原創設定（時間融合時代 × 蓋亞聯邦，小鎮「諾文」）。使用者想要的感覺是：**他們在一個地方好好活著**，玩家主要是觀察，偶爾互動。
 
-目前版本：v2.8.0
+目前版本：v3.26.0
 
 ---
 
@@ -39,6 +39,7 @@ node tools/validate.js .      # 檢查行程、地點、事件能不能觸發、
 | `picto.js` | 角色的 3D 人形：像標誌那種站著的圓潤人形，身體用角色代表色，頭是頭像圖示（Sprite） |
 | `life.js` | 生活層：每半小時（小鎮時間）跑一步，離線回來時補算。包含每日焦點、八卦傳播、物品流轉、蝴蝶效應（`chains` 排程後續）、紀元層異常、地點記憶、無聲互動。資料存在 `slot().life`；對外 `N.life.sync / onAction / placeHTML / gossipHTML / itemsHTML …`。v2.6 加上自主性：自主聚會、互相約人（`plansAt` 會覆蓋行程）、小圈子（群組 id 為 `circle:<id>`）、關係里程碑（`relChanged`，由 app 的 `setRel` 通知）、固定配對自己告白、進展速度 `store.pace` |
 | `lofi.js` | 即時合成的 lofi 背景音樂（WebAudio，不用音檔） |
+| `wishes.js` | 居民的小心願與心情（`N.mood`）：每天幾個人冒出 💭 找玩家商量小事，玩家的回應變成他當天的心情、日記、好感與回禮；也算每個人此刻的心情（居民清單、觀察、3D 卡片顯示）。存在 `slot().wish` |
 
 ### 資料（data/）
 | 檔案 | 內容 |
@@ -54,6 +55,7 @@ node tools/validate.js .      # 檢查行程、地點、事件能不能觸發、
 | `relations.js` | 起始好感、年齡組、關係階段 |
 | `festivals.js` | 節日、聚會、出遊 |
 | `diary.js` | 睡前一行日記的句型 |
+| `wishes.js` | 每個人的小心願（找玩家說的話、2～3 個回應、回應後的心情／日記／好感／回禮），格式寫在檔案開頭 |
 
 ### 其他
 - `icons/avatars/av01～av16.webp`：16 張頭像（使用者自己畫的）。
@@ -227,3 +229,4 @@ node tools/validate.js .      # 檢查行程、地點、事件能不能觸發、
 - v3.24.0：手機也能看 3D 小鎮。app `want3d()`：手機看 `store.ui.town3dPhone`（預設 false＝街區圖），電腦看 `store.ui.town3d`；手機也顯示「3D 小鎮／街區圖」切換和 3D 畫質設定；`canTown()` 跟著 want3d（手機開了 3D 才能走到戶外操控）。town3d quality() auto 在手機仍是 "low"（簡化小鎮，約 73 萬三角形）；可在設定選「輕量城市」（mobile）。觸控鏡頭：clampTarget 在觸控且非操控時最近 16（原本 5，一捏就貼到路燈）；雙指一起上下滑調 polar（像地圖 App），左右滑平移。手機 HUD：`.t3d-phone` 的 ⛶ 全螢幕（body.t3d-full，換頁或切街區圖時拿掉）和 ⋯（`.t3d-tools.open` 才顯示其他按鈕）；`#t3dFollowChip`「鏡頭跟著○○ ✕」每 0.5 秒看 `N.town3d.isFollowing()`，✕ 呼叫新 API `N.town3d.unfollow()`。注意：手機 3D 小鎮框是 touch-action:none，在框上滑不會捲動頁面。
 - v3.23.1：介面可讀性修正。操控畫面：樓層分頁、底部提示、搖桿改成自帶深色底（房間背景是米白色時原本白字看不見），提示會換行不再超出螢幕。觀察面板：不能操控時「操控」按鈕改成一般樣式並在下方說明原因（休息中／正在說話）；「關係」移到「偷看手機」旁邊補齊格子。設定：常用的（音樂、顏色、畫質、居民、好感）排前面；天氣、單雙週、模擬節日收進「🧪 模擬」摺疊區（`setOpen` 記住開合）；「清除小鎮時間的進度」移到「進度與備份」底部；iPhone 主畫面說明改成摺疊；開關類按鈕加 `.tog` 和右側開／關膠囊（`swHTML`）。節日橫幅改成上下兩行，節日名稱不再從中間斷開。
 - v3.23.0：blocky.js update 改成分層（走路→待機→act 活動→talking 手勢→emote 一次性動作），最後 lerp 到目標角度；新 API ch.emote(name)（wave/nod/cheer/shrug/give/high/pat/hug/laugh/think/bow/surprise/clap）。town3d：roomTalkPos（以操控者或第一個說話者為中心圍圈、同一段對話快取 RM.talk）、roomWander（p.free 隨機走）、roomEmote；roomFrame 站立 yaw 用 destYaw 否則維持、update 傳 act=p.actTag；小鎮 townTalkPos／TALK 快取、ENC_TALK、SIT_RE 決定戶外坐不坐、stand 位置每 40 秒換；N.town3d.emote、N.room3d.emote。app：state3d 加 talking；lineEmote（EMO_SAY 台詞、EMO_NARR 旁白）在 nextLine 和 ctlTalk 第一句觸發；doMore/giveGift 有專屬動作；拿掉 ctlApproach 呼叫（改成對方走過來）。
+- v3.26.0：居民的小心願與心情（新檔 `data/wishes.js`、`js/wishes.js`，index.html 與 sw.js 都有列）。`N.mood.pending(ck, where)`：依 dayKeyOf 每天抽 3～5 人，各在 9:00～18:30 之間某個半點冒出一個心願（避開他前兩次聽過的），到 22:00 或睡著就不顯示；回應記在 `slot().wish.done[day][人]`，歷史在 `hist`，回禮在 `thanks`。`moodOf` 的順序：剛回應過（6 小時內）→ 有心事 💭 → autoNeeds 的餓／累 → 交往對象在同一處 💗 → 每 3 小時一次的隨機心情。介面：居民頁上方「💭 有人想找你說話」、居民卡與觀察標題的心情小膠囊、觀察面板與 3D 居民卡的 💭 按鈕、3D 小鎮頭上的 💭（walker.wq，跟著 `state3d().wishes`）、通知（kind "wish"，點了直接開心事）、日誌「💭 心事」、日記優先用回應的 diary、設定「居民會冒出 💭 來找你說心事」（store.wishes）。`pushNews` 的 `quiet` 不跳橫幅。validate.js 會檢查 wishes.js（說話的人、心情、rel 對象、破折號）。順手修：自己跑去找朋友時，觀察面板不再顯示「還會待 16667 分」。

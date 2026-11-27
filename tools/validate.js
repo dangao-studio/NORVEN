@@ -93,3 +93,27 @@ for (const c of chars) { const v=N.partyVoice[c]; if(!v) warn("no party voice",c
   const o=N.outingVoice[c]; if(!o||!o.invite||!o.enjoy||!o.enjoy.length) warn("outing voice",c); }
 for (const sp of N.outingSpots) if (!locIds.has(sp.loc)) warn("outing loc", sp.loc);
 console.log("festivals checked");
+
+// 小心願（data/wishes.js）：每人都有、id 不重複、說話的人與相關的人存在、心情有定義、沒有破折號
+{
+  vm.runInContext(fs.readFileSync(path.join(root, "data/wishes.js"), "utf8"), ctx, { filename: "data/wishes.js" });
+  const MOOD = ["happy", "excited", "warm", "calm", "proud", "shy", "fired", "sleepy", "blue"], seen = new Set();
+  const lineOk = (w, l) => { if (l[0] !== "＊" && !chars.includes(l[0])) warn("wish speaker", w.id, l[0]); if (/[—–]/.test(l[1])) warn("dash wish", w.id); };
+  for (const c of chars) {
+    const L = N.wishes[c]; if (!L || L.length < 2) { warn("few wishes", c); continue; }
+    for (const w of L) {
+      if (seen.has(w.id)) warn("dup wish", w.id); seen.add(w.id);
+      if (!w.hint || /[。—–]/.test(w.hint)) warn("wish hint", w.id);
+      w.ask.forEach(l => lineOk(w, l));
+      if (!w.opts || w.opts.length < 2 || w.opts.length > 3) warn("wish opts", w.id);
+      for (const o of w.opts || []) {
+        if (!MOOD.includes(o.mood)) warn("wish mood", w.id, o.mood);
+        o.reply.forEach(l => lineOk(w, l));
+        if (o.rel && (!chars.includes(o.rel[0]) || o.rel[0] === c)) warn("wish rel", w.id, o.rel[0]);
+        for (const t of [o.label, o.diary, o.thanks]) if (t && /[—–]/.test(t)) warn("dash wish", w.id);
+      }
+    }
+  }
+  for (const c in N.wishes) if (!chars.includes(c)) warn("wish char", c);
+  console.log("wishes checked:", seen.size, "problems so far:", problems);
+}

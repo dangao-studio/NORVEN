@@ -932,3 +932,27 @@ body.ph-bare .ph-show { display: block; }
 .ph-acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .ph-acts .btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 @media (max-height: 560px) { .ph-panel { bottom: 12px; left: 12px; transform: none; width: min(400px, calc(100% - 110px)); } .ph-shutter { left: auto; right: 16px; transform: none; bottom: 50%; margin-bottom: -34px; } }
+
+/* ── 心情與小心願 ── */
+.mood-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--bg2); color: var(--ink2); white-space: nowrap; vertical-align: 2px; }
+.obs-name .mood-chip { margin-left: 8px; }
+.card3d-head .mood-chip { margin: 2px 0; }
+.mood-chip.mood-worry { background: var(--brass-soft); color: var(--brass); }
+.mood-chip.mood-happy, .mood-chip.mood-warm, .mood-chip.mood-love, .mood-chip.mood-excited { background: var(--teal-soft); color: var(--teal); }
+.mood-chip.mood-blue { background: #E3E6EE; color: #5A6378; }
+html.dark .mood-chip.mood-blue { background: #2C3140; color: #A9B3C9; }
+.wish-banner { padding: 12px 14px; margin-bottom: 12px; border: 1px solid color-mix(in srgb, var(--brass) 40%, var(--line)); }
+.wish-b-title { font-weight: 800; font-size: 15px; color: var(--brass); margin-bottom: 8px; }
+.wish-b-list { display: grid; gap: 8px; }
+.wish-b-item { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); text-align: left; cursor: pointer; }
+.wish-b-item b { display: block; font-size: 15px; }
+.wish-b-item small { display: block; font-size: 13px; color: var(--ink2); }
+.wish-btn { background: var(--brass-soft); color: var(--brass); border: 1px solid color-mix(in srgb, var(--brass) 35%, transparent); font-weight: 800; min-height: 44px; }
+.card3d-act:has(.wish-btn) { flex-wrap: wrap; }
+.card3d-act .wish-btn { flex: 1 1 100%; }
+.wish-talk { margin-top: 12px; }
+.wish-you { justify-self: end; max-width: 85%; background: var(--teal-soft); color: var(--teal); font-weight: 700; border-radius: 18px 4px 18px 18px; padding: 8px 14px; font-size: 16px; }
+.wish-opts { display: grid; gap: 10px; margin-top: 16px; }
+.wish-opt { min-height: 48px; font-size: 16px; }
+.wish-done div + div { margin-top: 4px; }
+.wish-log { padding: 12px 14px; }

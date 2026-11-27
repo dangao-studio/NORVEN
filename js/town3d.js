@@ -1082,14 +1082,16 @@
     const ring = new T.Mesh(new T.TorusGeometry(0.62, 0.07, 6, 28), new T.MeshBasicMaterial({ color: 0xD8A75A }));
     ring.rotation.x = Math.PI / 2; ring.position.y = 0.16; ring.visible = false; g.add(ring);
     const zz = emojiSprite("💤", 0.7); zz.position.set(0.6, 2.1, 0); zz.visible = false; g.add(zz);
+    const wq = emojiSprite("💭", 0.85); wq.position.set(-0.55, 2.2, 0); wq.visible = false; g.add(wq);   // 有心事想找玩家說
     const name = textSprite(c.id, { size: 26, bg: "rgba(24,27,38,.78)", fg: "#fff", pad: 10, h: 0.5 });
     name.position.y = 0.0; name.center.set(0.5, 1.2); name.visible = false; g.add(name);
     g.scale.set(1.45, 1.45, 1.45); g.userData.isWalker = true;
     root.add(g);
     // 比例：小鎮 1 單位 = 1.6 公尺，人 1.6 公尺 → 1 單位高
     const ch = chibiFor(c.id, 0.431, g);
-    if (ch) { body.visible = false; head.visible = false; zz.position.y = 0.95; zz.scale.multiplyScalar(0.7); ring.scale.setScalar(0.6); }
-    return { id: c.id, color: c.color, g, body, head, ring, zz, name, ch, yaw: 0, pos: new T.Vector3(), path: [], loc: null, asleep: false, phase: Math.random() * 6, fade: 1, train: false };
+    if (ch) { body.visible = false; head.visible = false; zz.position.y = 0.95; zz.scale.multiplyScalar(0.7); ring.scale.setScalar(0.6); wq.position.set(-0.28, 1.02, 0); wq.scale.multiplyScalar(0.45); }
+    wq.userData.y = wq.position.y;
+    return { id: c.id, color: c.color, g, body, head, ring, zz, wq, name, ch, yaw: 0, pos: new T.Vector3(), path: [], loc: null, asleep: false, phase: Math.random() * 6, fade: 1, train: false };
   }
   function spotFor(locId, i, n) {
     const L = lots[locId]; if (!L) return null;
@@ -2862,6 +2864,8 @@
       if (w.ring.visible) { const s = 1 + Math.sin(ttW * 4) * 0.08; w.ring.scale.set(s, s, s); }
       w.zz.visible = w.asleep && w.fade > 0.5;
       if (w.zz.visible) w.zz.position.y = 2.1 + Math.sin(ttW * 1.5 + w.phase) * 0.12;
+      w.wq.visible = !!(state && state.wishes && state.wishes.has(id)) && !w.asleep && w.fade > 0.5 && !FP.on;
+      if (w.wq.visible) w.wq.position.y = w.wq.userData.y + Math.abs(Math.sin(ttW * 2.2 + w.phase)) * 0.12;
       if (FP.on) {
         // 第一人稱：名牌只顯示附近 8 單位內的人，縮小、放在頭頂上
         if (!w.name.userData.s0) w.name.userData.s0 = w.name.scale.clone();
@@ -4488,7 +4492,7 @@
     labelSprites.forEach(hide); districtSprites.forEach(hide);
     for (const id in lots) hide(lots[id].badge);
     for (const id in hintMarks) hide(hintMarks[id]);
-    for (const id in walkers) { const w = walkers[id]; hide(w.name); hide(w.ring); hide(w.zz); }
+    for (const id in walkers) { const w = walkers[id]; hide(w.name); hide(w.ring); hide(w.zz); if (w.wq) hide(w.wq); }
     bubbles.forEach(b => hide(b.sp));
     return out;
   }
