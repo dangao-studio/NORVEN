@@ -162,6 +162,11 @@
     const edge = {}; for (const c of cells) if (edge[c.j] == null || c.i < edge[c.j]) edge[c.j] = c.i;
     for (const c of cells) if (c.kind === "open" && edge[c.j] === c.i) c.kind = "harbor";
     const rows = Object.keys(edge).map(Number).sort((a, b) => a - b);
+    // 地下湖：舊城河岸那個街區往南、島最外面那一格（城的邊緣），整格給岩丘和洞口
+    let lakeCell = null;
+    { const [li] = LOC.oldtown1, col = cells.filter(c => c.i === li && (c.kind === "open" || c.kind === "far" || c.kind === "near"));
+      const jm = Math.max(...col.map(c => c.j), -1e9); lakeCell = col.find(c => c.j === jm && c.j > LOC.oldtown1[1]) || null;
+      if (lakeCell) lakeCell.kind = "lake"; }
     // 港池：舊城那排最西邊的格子挖成方形港池
     let basin = null;
     { const j = rows.includes(-1) ? -1 : rows[Math.floor(rows.length / 2)], c = cells.find(c => c.j === j && c.i === edge[j]);
@@ -223,7 +228,7 @@
     const onRoad = (x, z) => (cells.some(c => x > c.x - ROADE && x < c.x + BW + ROADE && z > c.z - ROADE && z < c.z + BD + ROADE) || (basin && x >= basin.x1 && x < basin.cell.x + BW + ROADE && z > basin.cell.z - ROADE && z < basin.cell.z + BD + ROADE)) && !seaAt(x, z);
     // 在人行道上（街區往外 SIDEW 以內）；馬路＝onRoad 但不在人行道
     const onWalkway = (x, z) => cells.some(c => x > c.x - SIDEW && x < c.x + BW + SIDEW && z > c.z - SIDEW && z < c.z + BD + SIDEW);
-    return { AW, NW, SIDEW, ROADE, onWalkway: null, BW, BD, RC, cx: BW / 2, cz: BD / 2, colX, rowZ, xr, zr, BLOCK, cells, minX, maxX, minZ, maxZ, sideOf, plaza: { x: colX[0], z: rowZ[0] }, rb, coast, seaAt, coastDist, basin, onRoad, edge, walkway: onWalkway };
+    return { AW, NW, SIDEW, ROADE, onWalkway: null, BW, BD, RC, cx: BW / 2, cz: BD / 2, colX, rowZ, xr, zr, BLOCK, cells, minX, maxX, minZ, maxZ, sideOf, plaza: { x: colX[0], z: rowZ[0] }, lakeCell, rb, coast, seaAt, coastDist, basin, onRoad, edge, walkway: onWalkway };
   })();
   const BLOCK = GRID.BLOCK;
   const BOUNDS = { x0: GRID.minX + 10, x1: GRID.maxX - 10, z0: GRID.minZ + 10, z1: GRID.maxZ - 10 };
@@ -238,7 +243,11 @@
   const palOf = l => l.region === "outer" ? (l.page === 1 ? PAL.pero : l.page === 2 ? PAL.other : PAL.outer) : PAL[l.region];
   const isPlaza = l => /鐘塔廣場/.test(l.id);
   const blockOf = l => isPlaza(l) ? [GRID.plaza.x, GRID.plaza.z] : BLOCK[l.region + l.page];
+  // 地下湖搬到城邊那一格：洞口朝南（朝海邊步道），lot 中心在洞口後面一點
+  const lakeMoved = l => !!(l && GRID.lakeCell && /地下湖/.test(l.id));
+  const LAKE = { K: 1.5, door: 1.6, mouth: 1.4, back: 3.6 };   // 洞口模型放大 1.5 倍；門口、洞口、隧道底（單位，相對 lot 中心往 +z）
   function lotPos(l) {
+    if (lakeMoved(l)) return { x: GRID.lakeCell.x + 7, z: GRID.lakeCell.z + 16 };
     if (isPlaza(l)) return { x: GRID.plaza.x + 7, z: GRID.plaza.z + 7 };   // 鐘塔廣場：正中間那一整格
     const b = blockOf(l), c = l.slot % 2, r = Math.floor(l.slot / 2);
     return { x: b[0] + 3.5 + c * 7, z: b[1] + 3.5 + r * 7 };
@@ -518,10 +527,17 @@
       if (l.id === "諾文甜點店") Object.assign(info, { wall: 0xF2B6C4, roof: 0xF07AA0 });
       if (type === "lake" && N.voxCity.lakeGate) {
         // 地下湖：河岸邊拱起的岩丘和石砌洞口，台階往下（湖在地底，地面上只看得到入口）
-        const r = N.voxCity.lakeGate(T);
-        r.group.position.y = VOXY; g.add(r.group);
-        r.lamps.forEach(([x, z, c]) => lampSpots.push([p.x + x, p.z + z, c]));
-        h = Math.max(2.5, r.top + 0.6);
+        const r = N.voxCity.lakeGate(T), K = lakeMoved(l) ? LAKE.K : 1;
+        r.group.position.y = VOXY; r.group.scale.multiplyScalar(K); g.add(r.group);
+        r.lamps.forEach(([x, z, c]) => lampSpots.push([p.x + x * K, p.z + z * K, c]));
+        h = Math.max(2.5, r.top * K + 0.6);
+        // 搬到城邊之後：整格是一座岩丘，洞口嵌在南面（朝海邊步道），比例跟旁邊的房子、路燈差不多
+        if (lakeMoved(l) && N.voxCity.lakeHill) {
+          const U = 1.6, c = GRID.lakeCell;
+          const hill = N.voxCity.lakeHill(T, { w: 7 * U, d0: (p.z - c.z) * U, d1: (c.z + 21 - p.z) * U, gate: { w: 5.4 * K, back: 5.4 * K, tunnel: 1.4 * K, tback: 4.2 * K, h: 3.0 * K } });
+          hill.group.position.y = VOXY; g.add(hill.group);
+          h = Math.max(h, hill.top + 0.6);
+        }
       } else if (night) {
         // 夜市：原本的空地改成一排小吃店（裝飾），攤子擺在旁邊大道的兩側
         if (HQ()) {
@@ -1095,7 +1111,11 @@
   }
   function spotFor(locId, i, n) {
     const L = lots[locId]; if (!L) return null;
-    if (L.open && L.type === "lake") return new T.Vector3(L.x + (i - (n - 1) / 2) * 0.9, 0, L.z + 2.3);   // 站在洞口前
+    if (L.open && L.type === "lake") {
+      // 走進洞口、沿台階往下（走到隧道深處就看不到了，跟進室內一樣）
+      if (GRID.lakeCell) return new T.Vector3(L.x + ((i % 3) - 1) * 0.45, 0, L.z - LAKE.back + 0.9 + Math.floor(i / 3) * 0.35);
+      return new T.Vector3(L.x + (i - (n - 1) / 2) * 0.9, 0, L.z + 2.3);   // 舊位置：站在洞口前
+    }
     if (L.open) {
       const r = n > 1 ? 1.5 + n * 0.12 : 0, a = (i / Math.max(1, n)) * Math.PI * 2 + 0.6;
       const off = L.type === "tower" || L.type === "park" ? 1.6 : L.type === "lake" ? 0 : 0.8;
@@ -1117,6 +1137,8 @@
   const FRONT = { house: 1.95, attic: 1.85, shop: 2.4, tall: 2.4, school: 2.95, street: 1.2, wizard: 1.0 };
   const laneZ = L => L.z + 3.2;
   const doorOf = id => { const L = lots[id]; return L && !L.open ? new T.Vector3(L.x, 0, L.z + (FRONT[L.type] || 2.2)) : null; };
+  // 走得進去的入口：室內地點的門，或地下湖的洞口（搬到城邊之後）
+  const entryOf = id => { const L = lots[id]; return L && L.type === "lake" && GRID.lakeCell ? new T.Vector3(L.x, 0, L.z + LAKE.door) : doorOf(id); };
   const sideX = l => { const b = blockOf(l); return GRID.sideOf(b[0], isPlaza(l) ? true : l.slot % 2 === 1); };   // 離這個地點最近的街區旁巷道
   /* 走路路線：用小鎮的走路格子找路（會繞過房子、裝飾街區、平台上的家具），不會再直接穿過建築
    * 出門：從房間裡走到門口、站到門外；進門：走到門外、進門、走到位子。找不到路時用舊的沿街路線。 */
@@ -1129,9 +1151,9 @@
     if (a && a.id === b.id && bestD < 3.5) { w.path = [dest]; return; }
     const V = (x, z) => new T.Vector3(x, 0, z), P = [];
     let start = w.pos.clone();
-    const d1 = a && La && bestD < 3.5 ? doorOf(a.id) : null;
+    const d1 = a && La && bestD < 3.5 ? entryOf(a.id) : null;
     if (d1 && w.pos.z < d1.z - 0.05 && Math.abs(w.pos.x - La.x) < 3.4) { start = V(d1.x, d1.z + 0.35); P.push(V(La.x, Math.min(w.pos.z, La.z + 0.6)), d1, start.clone()); }
-    const d2 = doorOf(b.id), goal = d2 ? V(d2.x, d2.z + 0.35) : dest.clone();
+    const d2 = entryOf(b.id), goal = d2 ? V(d2.x, d2.z + 0.35) : dest.clone();
     const mid = wPath(start, goal);
     if (!mid) return routeToOld(w, dest, destLoc);
     P.push(...mid);
@@ -1343,7 +1365,7 @@
     await breathe(onP, 0.78, "種樹、整理花圃……");
     // 街區裡沒有地點的空格：補小花園或背景小屋
     if (N.voxTown) for (const k in BLOCK) {
-      const used = new Set(N.locations.filter(l => l.region + l.page === k && !isPlaza(l)).map(l => l.slot));
+      const used = new Set(N.locations.filter(l => l.region + l.page === k && !isPlaza(l) && !lakeMoved(l)).map(l => l.slot));
       const reg = k === "outer1" ? "pero" : k === "outer2" ? "other" : k.replace(/\d+$/, ""), pal = PAL[reg] || PAL.central;
       for (let slot = 0; slot < 6; slot++) {
         if (used.has(slot)) continue;
@@ -1365,6 +1387,11 @@
     for (const c of GRID.cells) {
       if (c.kind === "loc") continue;
       if (c.kind === "plaza") { buildPlaza(c); continue; }
+      if (c.kind === "lake") {
+        // 地下湖那一格：岩丘和洞口由地點自己蓋，這裡只補四周的人行道（手機也要，不然洞口前面沒有路）
+        if (N.voxTown) { const sw = N.voxTown.block(T, 14.6, 21.6, { reg: "oldtown", seed: c.i * 7 + c.j * 13, winMat, lampMat, crystal: false }); const g = new T.Group(); g.position.set(c.x - 0.3, VOXY, c.z - 0.3); sw.meshes.forEach(m => g.add(m)); root.add(g); sw.lamps.forEach(([x, z]) => lampSpots.push([c.x - 0.3 + x, c.z - 0.3 + z])); }
+        continue;
+      }
       if (MQ() && c.r > 0.5) continue;   // 手機：外圈交給霧和山
       const slab = new T.Mesh(new T.BoxGeometry(14.6, 0.06, 21.6), mat(0xD0C4AE)); slab.position.set(c.x + 7, 0.03, c.z + 10.5); slab.receiveShadow = true; root.add(slab);
       if ((c.kind === "open" || c.kind === "harbor") && N.voxTown && N.voxTown.park) {
@@ -1788,7 +1815,7 @@
     const rnd = (a, b, c) => { let h = (a * 73856093) ^ (b * 19349663) ^ (c * 83492791); h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
     const lines = [], lan = [], flags = [], bulbs = [], walks = [];
     const cellAt = {}; for (const c of GRID.cells) cellAt[c.i + "," + c.j] = c;
-    const locAtSlot = (k, slot) => N.locations.find(l => l.region + l.page === k && l.slot === slot && !isPlaza(l));
+    const locAtSlot = (k, slot) => N.locations.find(l => l.region + l.page === k && l.slot === slot && !isPlaza(l) && !lakeMoved(l));
     // 街區某一側在 z（或 x）位置有沒有牆可以掛
     const hasWall = (c, side, t) => {
       if (c.kind === "plaza") return false;
@@ -2834,7 +2861,8 @@
       }
       if (w.manualWalk > 0) { w.manualWalk -= dtW; walking = true; }   // 搖桿／鍵盤直接走
       const Lw = !w.path.length && !w.train && lots[w.loc];
-      const indoors = Lw && !Lw.open && Math.abs(w.pos.x - Lw.x) < 3 && w.pos.z < Lw.z + 1;
+      const indoors = Lw && (!Lw.open ? Math.abs(w.pos.x - Lw.x) < 3 && w.pos.z < Lw.z + 1
+        : Lw.type === "lake" && GRID.lakeCell && Math.abs(w.pos.x - Lw.x) < 1.6 && w.pos.z < Lw.z + LAKE.mouth - 1.2);   // 地下湖：走下台階、進了隧道就看不到
       // 姿勢：到位之後才坐下、躺下
       const pose = !walking && !w.train && w.dest && w.pos.distanceTo(w.dest) < 0.05 ? (w.destPose || "stand") : "stand";
       if (pose !== w.pose) {
@@ -3944,7 +3972,7 @@
     for (const id in lots) {
       const L = lots[id], n = (groups[id] || []).length;
       L.occ = n;
-      if (L.open) continue;
+      if (L.open && !(L.type === "lake" && GRID.lakeCell)) continue;   // 地下湖在地底：跟室內一樣用人數牌子
       if (L.badgeN !== n) {
         if (L.badge) { root.remove(L.badge); L.badge.material.map.dispose(); L.badge.material.dispose(); L.badge = null; }
         if (n) { L.badge = textSprite("👤 " + n, { size: 28, bg: "rgba(168,118,51,.95)", fg: "#fff", pad: 12, h: 0.6 }); L.badge.position.set(L.x + 2.1, L.h + 0.4, L.z); L.badge.userData.loc = id; L.badge.renderOrder = 6; root.add(L.badge); }
@@ -3957,7 +3985,8 @@
       // 戶外平台：只有在吃東西、讀書、休息、聊天的人才坐下（跟房間畫面同一套座位）；其他人站著，隔一陣子換個地方站
       const seatList = L0 && L0.plat ? L0.plat.spots.filter(sp => sp.pose === "sit") : [], off = hashStr(loc) % Math.max(1, seatList.length);
       const stands = L0 && L0.plat ? L0.plat.stand : [];
-      const talkers = ids.filter(id => tset.has(id) && s.where[id].avail), talk = townTalkPos(loc, talkers, s);
+      const underground = L0 && L0.type === "lake" && GRID.lakeCell;
+      const talkers = underground ? [] : ids.filter(id => tset.has(id) && s.where[id].avail), talk = townTalkPos(loc, talkers, s);
       let si = 0;
       ids.forEach((id, i0) => {
         const tp = talk[id], sitter = !tp && s.where[id].avail && SIT_RE.test(s.where[id].act || "");
@@ -4085,6 +4114,9 @@
       for (let cz = b0; cz <= b1; cz++) for (let cx = a0; cx <= a1; cx++) d[cz * WG.nx + cx] = 1;
     };
     for (const c of GRID.cells) if (c.kind === "near" || c.kind === "far" || c.kind === "harbor") rect(c.x - 0.3, c.x + 14.3, c.z - 0.3, c.z + 21.3);
+    // 地下湖的岩丘（城邊那一格）：整座山擋起來，只留洞口往裡走的隧道
+    { const lk = Object.keys(lots).find(id => lots[id].type === "lake"), L = lk && lots[lk], c = GRID.lakeCell;
+      if (L && c) rect(c.x - 0.3, c.x + 14.3, c.z - 0.3, L.z + LAKE.mouth - 0.1); }
     for (const [px, pz] of COAST.railPiers || []) rect(px - 0.45, px + 0.45, pz - 0.6, pz + 0.6);   // 高架鐵路的橋墩
     // 給居民找路用的版本：車道擋起來，只留路口（兩條街交會的那一塊）可以穿過
     { const ped = WG.ped = d.slice(), X = GRID.xr, Z = GRID.zr, hw = GRID.AW / 2 + 0.2;
@@ -4100,11 +4132,13 @@
     for (const c of GRID.cells) { const al = alleyOf(c); if (!al) continue;
       open(c.x + 5.25, c.x + 8.75, c.z + 5.25, c.z + 15.75);
       if (al === "w") open(c.x - 0.3, c.x + 5.3, c.z + 9.7, c.z + 11.3); else open(c.x + 8.7, c.x + 14.3, c.z + 9.7, c.z + 11.3); }
+    { const lk = Object.keys(lots).find(id => lots[id].type === "lake"), L = lk && lots[lk];   // 操控時可以走進地下湖的隧道
+      if (L && GRID.lakeCell) open(L.x - 0.9, L.x + 0.9, L.z - LAKE.back, L.z + LAKE.mouth + 0.2); }
     for (const k in BLOCK) for (let slot = 0; slot < 6; slot++) {
       const reg = k.replace(/\d+$/, ""), pg = +k.slice(-1), p = lotPos({ region: reg, page: pg, slot });
-      const l = N.locations.find(q => q.region === reg && q.page === pg && q.slot === slot && !isPlaza(q)), L = l && lots[l.id];
+      const l = N.locations.find(q => q.region === reg && q.page === pg && q.slot === slot && !isPlaza(q) && !lakeMoved(q)), L = l && lots[l.id];
       if (L && L.plat && !/夜市/.test(l.id)) continue;            // 平台：下面照家具擋
-      if (L && L.type === "lake") { rect(p.x - 3.5, p.x + 3.5, p.z - 3.5, p.z + 0.9); continue; }
+      if (L && L.type === "lake") { rect(p.x - 3.5, p.x + 3.5, p.z - 3.5, p.z + 0.9); continue; }   // （沒搬到城邊時的舊位置）
       const front = L && !/夜市/.test(l.id) ? (FRONT[L.type] || 2.2) : l ? 2.4 : 1.95;
       rect(p.x - 3.45, p.x + 3.45, p.z - 3.5, p.z + front - 0.15);
     }
@@ -4184,7 +4218,7 @@
   // 可以走進去的門口：室內地點的門，地下湖的洞口
   function doorAt(x, z, r) {
     for (const id in lots) {
-      const L = lots[id], d = L.type === "lake" ? new T.Vector3(L.x, 0, L.z + 1.15) : doorOf(id);
+      const L = lots[id], d = L.type === "lake" ? new T.Vector3(L.x, 0, L.z + (GRID.lakeCell ? LAKE.door : 1.15)) : doorOf(id);
       if (d && Math.hypot(d.x - x, d.z - z) < (r || 0.5)) return id;
     }
     return null;
@@ -4242,7 +4276,8 @@
     const gh = rc.intersectObjects(Object.values(lots).filter(L => !L.open).map(L => L.group), true);
     if (gh.length) { let o = gh[0].object; while (o && !o.userData.loc) o = o.parent; if (o) { const d = doorOf(o.userData.loc); if (d) { tGo(d); TC.door = o.userData.loc; return; } } }
     const lk = Object.keys(lots).find(id => lots[id].type === "lake"), Lk = lk && lots[lk];
-    if (Lk && Math.abs(q.x - Lk.x) < 3.5 && q.z > Lk.z - 3.5 && q.z < Lk.z + 1.2) { tGo(new T.Vector3(Lk.x, 0, Lk.z + 1.15)); TC.door = lk; return; }
+    const lkIn = Lk && (GRID.lakeCell ? (c => q.x > c.x - 0.3 && q.x < c.x + 14.3 && q.z > c.z - 0.3 && q.z < Lk.z + LAKE.mouth + 0.2)(GRID.lakeCell) : Math.abs(q.x - Lk.x) < 3.5 && q.z > Lk.z - 3.5 && q.z < Lk.z + 1.2);
+    if (lkIn) { tGo(new T.Vector3(Lk.x, 0, Lk.z + (GRID.lakeCell ? LAKE.door : 1.15))); TC.door = lk; return; }
     TC.door = null;
     tGo(q);
   }
@@ -4286,7 +4321,7 @@
   const tCtl = {
     control: tControl, ctlGo: tGo, ctlMove: (vx, vz) => { if (TC) { TC.vx = vx; TC.vz = vz; } },
     ctlUseSpot: opt => tGo(new T.Vector3(opt.spot.x, 0, opt.spot.z), opt.spot), ctlApproach: tApproach, ctlScreen: tScreen, emote: townEmote,
-    isOutdoor: id => !!(lots[id] && lots[id].plat), doorPos: id => { const L = lots[id]; if (!L) return null; return L.type === "lake" ? new T.Vector3(L.x, 0, L.z + 1.6) : L.plat ? null : doorOf(id) && doorOf(id).add(new T.Vector3(0, 0, 0.6)); }
+    isOutdoor: id => !!(lots[id] && lots[id].plat), doorPos: id => { const L = lots[id]; if (!L) return null; return L.type === "lake" ? new T.Vector3(L.x, 0, L.z + (GRID.lakeCell ? LAKE.door + 0.5 : 1.6)) : L.plat ? null : doorOf(id) && doorOf(id).add(new T.Vector3(0, 0, 0.6)); }
   };
 
   /* ═════════ 第一人稱 ═════════ */
@@ -4328,7 +4363,7 @@
     const cs = GRID.cells.concat(GRID.basin ? [GRID.basin.cell] : []);
     for (const c of cs) { const [a, b] = P(c.x - RE, c.z - RE); g.fillRect(a, b, (GRID.BW + RE * 2) * k, (GRID.BD + RE * 2) * k); }
     // 街區
-    const COL = { plaza: "#e6d6ac", loc: "#c99a5b", near: "#a8988a", far: "#b3a596", open: "#9fc48a", harbor: "#9aa3a8" };
+    const COL = { plaza: "#e6d6ac", loc: "#c99a5b", near: "#a8988a", far: "#b3a596", open: "#9fc48a", harbor: "#9aa3a8", lake: "#7E8A74" };
     for (const c of GRID.cells) {
       g.fillStyle = COL[c.kind] || "#aaa";
       const [a, b] = P(c.x + 0.4, c.z + 0.4); g.fillRect(a, b, (GRID.BW - 0.8) * k, (GRID.BD - 0.8) * k);
