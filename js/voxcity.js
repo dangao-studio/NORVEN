@@ -1419,6 +1419,43 @@
     return { group: g, lamps: lamps.map(([x, z, c]) => [x / UNIT, z / UNIT, c]), top: 40 * V / UNIT };
   }
 
+  /* ═════════ 地下湖的岩丘：城邊整格的一座小山，洞口（lakeGate）嵌在南面 ═════════
+   * 一格 20 公分（山很大，用粗一點的格子省記憶體）；座標以 lot 中心為原點，公尺。
+   * w、d0、d1：這一格往左右、往北（後面）、往南（前面）各延伸幾公尺；gate：洞口模型石板的半寬和後緣（地面不重蓋）、隧道的半寬、深度、高（山不蓋進去），公尺。 */
+  function lakeHill(T, o) {
+    const S = 0.2, X = Math.round(o.w / S), Z0 = -Math.round(o.d0 / S), Z1 = Math.round(o.d1 / S), lamps = [];
+    const G = new Box(-X - 1, X + 1, 56, Z0 - 1, Z1 + 1);
+    const gw = o.gate.w / S, gb = -o.gate.back / S, tw = o.gate.tunnel / S, tb = -o.gate.tback / S, th = o.gate.h / S;
+    const rock = (x, y, z) => { const h = H(x >> 1, y >> 1, z >> 1); return h < 0.3 ? 0x6E6A62 : h < 0.6 ? 0x7E7A70 : h < 0.88 ? 0x8C887E : 0x66625A; };
+    const cz = Z0 * 0.5, rx = X - 2, rz = (-Z0) * 0.5 + 2;
+    for (let x = -X; x <= X; x++) for (let z = Z0; z <= Z1; z++) {
+      // 地面：洞口模型那一塊它自己有石板，其他地方是草地和碎石
+      if (Math.abs(x) > gw || z < gb) G.set(x, 0, z, H(x >> 2, 3, z >> 2) < 0.7 ? (H(x, 1, z) < 0.5 ? 0x7FA060 : 0x739656) : 0x9A9284, 0);
+      if (z > -2) continue;
+      // 山：橢圓的小山，邊緣不規則，北邊（後面）比較高；南面在洞口兩側往前收
+      const r = (x / rx) ** 2 + ((z - cz) / rz) ** 2, nz = 0.82 + 0.18 * H(x >> 3, 5, z >> 3) + 0.08 * Math.sin(x / 7 + z / 11);
+      let h = Math.round(46 * Math.sqrt(Math.max(0, 1 - r * nz)) * (0.9 + 0.1 * H(x >> 2, 9, z >> 2)));
+      if (h <= 0) continue;
+      for (let y = 1; y <= h; y++) {
+        if (Math.abs(x) < tw && z > tb && y < th) continue;   // 隧道和洞口模型的位置空出來
+        const top = y >= h - 1, moss = top && h > 5 && H(x >> 2, 7, z >> 2) < 0.72;
+        G.set(x, y, z, moss ? (H(x >> 1, z >> 1, 2) < 0.7 ? 0x6A9A4E : 0x5A8A42) : rock(x, y, z), 0);
+      }
+      // 山頂上幾叢灌木和小松樹
+      if (h > 22 && H(x >> 3, 11, z >> 3) < 0.09 && x % 8 === 0 && z % 8 === 0) {
+        for (let y = h + 1; y < h + 5; y++) G.set(x, y, z, 0x5A4030, 0);
+        for (let y = h + 4; y < h + 12; y++) { const rr = Math.max(0, 3 - ((y - h - 4) >> 1)); for (let dx = -rr; dx <= rr; dx++) for (let dz = -rr; dz <= rr; dz++) if (Math.abs(dx) + Math.abs(dz) <= rr + 1) G.set(x + dx, y, z + dz, y % 2 ? 0x4F7A55 : 0x46704C, 0); }
+      }
+    }
+    // 山腳的大石頭
+    for (const [bx, bz, br] of [[-X + 6, -8, 4], [X - 7, -12, 5], [-X + 10, Z0 + 8, 5], [X - 9, Z0 + 10, 4]]) {
+      for (let x = -br; x <= br; x++) for (let z = -br; z <= br; z++) for (let y = 1; y <= br; y++) if (x * x + z * z + (y * 1.4) ** 2 <= br * br + 2) G.set(bx + x, y, bz + z, rock(bx + x, y, bz + z), 0);
+    }
+    const ms = toMeshes(T, G, S); G.clear();
+    const g = new T.Group(); ms.forEach(m => g.add(m)); g.scale.setScalar(1 / UNIT);
+    return { group: g, lamps, top: 46 * S / UNIT };
+  }
+
   /* ═════════ 房間的方塊（voxroom，一格 10 公分）轉成小鎮用的合併網格 ═════════
    * 戶外地點在小鎮上直接用房間平台那一套模型；分成 6.4 公尺一塊轉換，免得一次開太大的格子。 */
   function fromVoxels(T, vox) {
@@ -1458,5 +1495,5 @@
     return { group: g, lamps: lamps.map(([x, z, c]) => [x / UNIT, z / UNIT, c]) };
   }
 
-  N.voxCity = { island, skywalk, tick, fromVoxels, lot, filler, farBlock, block, marketStreet, lakeGate, clockTower, mountains, setNight, mats, UNIT, styleOf, TYPE, _build: { Box, building, toMeshes, palette, floorsFor, setLite: v => { LITE = v; } } };
+  N.voxCity = { island, skywalk, tick, fromVoxels, lot, filler, farBlock, block, marketStreet, lakeGate, lakeHill, clockTower, mountains, setNight, mats, UNIT, styleOf, TYPE, _build: { Box, building, toMeshes, palette, floorsFor, setLite: v => { LITE = v; } } };
 })();

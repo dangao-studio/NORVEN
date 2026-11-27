@@ -2,7 +2,7 @@
 
 這是一個手機優先的「小鎮觀察」網頁 App（PWA）。世界觀與 16 位角色是使用者的原創設定（時間融合時代 × 蓋亞聯邦，小鎮「諾文」）。使用者想要的感覺是：**他們在一個地方好好活著**，玩家主要是觀察，偶爾互動。
 
-目前版本：v3.26.0
+目前版本：v3.26.1
 
 ---
 
@@ -157,7 +157,7 @@ node tools/validate.js .      # 檢查行程、地點、事件能不能觸發、
 - `LITE`：遠處用，牆面花紋變平、瓦片不分排、不加凸出的小東西、不投影子。
 - `sideBack()`（每層都跑）：側窗（深度每 2.4 公尺一扇）、背面窗、後門；非 LITE 再加排水管、冷氣、晾衣竿（中日）、陽台（歐）、鐵梯與管線（賽博）。`roof()` 在山牆加小窗，閣樓內部標成 inside，屋瓦內側不畫；meshBox 不畫貼地的底面。
 - 夜市：`town3d nightStreet(l)` 算出旁邊大道的位置；`voxCity.marketStreet(T, { len, width, seed })` 兩排攤子＋燈籠串，轉 90 度擺到大道上。lots["諾文夜市"] 的 x、z 是街上中點（居民站在街上），原本的格子用 voxCity.lot（HQ）／voxTown street（一般）蓋一排小吃店，SPEC 有「諾文夜市」。
-- 地下湖：`voxCity.lakeGate(T)`（兩種畫質都用），居民站在洞口前（spotFor 的 lake 分支）。房間尺寸在 interiors-extra.js（18×14），湖面和碼頭（`dock` 支援 `l` 長度）在 interiors.js。
+- 地下湖：`voxCity.lakeGate(T)`（兩種畫質都用）。v3.26.1 起搬到城邊（`GRID.lakeCell`），居民走進隧道後隱藏，見版本紀錄 v3.26.1。房間尺寸在 interiors-extra.js（18×14），湖面和碼頭（`dock` 支援 `l` 長度）在 interiors.js。
 - 效能參考（HQ 全城）：約 450 萬三角形、幾何資料約 260 MB（原本約 310 萬、250 MB）。
 - town3d_debug() 多回傳 cam，方便截圖測試。
 
@@ -230,3 +230,4 @@ node tools/validate.js .      # 檢查行程、地點、事件能不能觸發、
 - v3.23.1：介面可讀性修正。操控畫面：樓層分頁、底部提示、搖桿改成自帶深色底（房間背景是米白色時原本白字看不見），提示會換行不再超出螢幕。觀察面板：不能操控時「操控」按鈕改成一般樣式並在下方說明原因（休息中／正在說話）；「關係」移到「偷看手機」旁邊補齊格子。設定：常用的（音樂、顏色、畫質、居民、好感）排前面；天氣、單雙週、模擬節日收進「🧪 模擬」摺疊區（`setOpen` 記住開合）；「清除小鎮時間的進度」移到「進度與備份」底部；iPhone 主畫面說明改成摺疊；開關類按鈕加 `.tog` 和右側開／關膠囊（`swHTML`）。節日橫幅改成上下兩行，節日名稱不再從中間斷開。
 - v3.23.0：blocky.js update 改成分層（走路→待機→act 活動→talking 手勢→emote 一次性動作），最後 lerp 到目標角度；新 API ch.emote(name)（wave/nod/cheer/shrug/give/high/pat/hug/laugh/think/bow/surprise/clap）。town3d：roomTalkPos（以操控者或第一個說話者為中心圍圈、同一段對話快取 RM.talk）、roomWander（p.free 隨機走）、roomEmote；roomFrame 站立 yaw 用 destYaw 否則維持、update 傳 act=p.actTag；小鎮 townTalkPos／TALK 快取、ENC_TALK、SIT_RE 決定戶外坐不坐、stand 位置每 40 秒換；N.town3d.emote、N.room3d.emote。app：state3d 加 talking；lineEmote（EMO_SAY 台詞、EMO_NARR 旁白）在 nextLine 和 ctlTalk 第一句觸發；doMore/giveGift 有專屬動作；拿掉 ctlApproach 呼叫（改成對方走過來）。
 - v3.26.0：居民的小心願與心情（新檔 `data/wishes.js`、`js/wishes.js`，index.html 與 sw.js 都有列）。`N.mood.pending(ck, where)`：依 dayKeyOf 每天抽 3～5 人，各在 9:00～18:30 之間某個半點冒出一個心願（避開他前兩次聽過的），到 22:00 或睡著就不顯示；回應記在 `slot().wish.done[day][人]`，歷史在 `hist`，回禮在 `thanks`。`moodOf` 的順序：剛回應過（6 小時內）→ 有心事 💭 → autoNeeds 的餓／累 → 交往對象在同一處 💗 → 每 3 小時一次的隨機心情。介面：居民頁上方「💭 有人想找你說話」、居民卡與觀察標題的心情小膠囊、觀察面板與 3D 居民卡的 💭 按鈕、3D 小鎮頭上的 💭（walker.wq，跟著 `state3d().wishes`）、通知（kind "wish"，點了直接開心事）、日誌「💭 心事」、日記優先用回應的 diary、設定「居民會冒出 💭 來找你說心事」（store.wishes）。`pushNews` 的 `quiet` 不跳橫幅。validate.js 會檢查 wishes.js（說話的人、心情、rel 對象、破折號）。順手修：自己跑去找朋友時，觀察面板不再顯示「還會待 16667 分」。
+- v3.26.1：地下湖搬到城邊。`GRID.lakeCell`：舊城河岸街區（LOC.oldtown1）同一欄最南邊、島最外圈那一格，kind 改成 "lake"（不蓋公園，只補四周人行道，手機也蓋）。`lotPos` 對地下湖回傳那一格（`lakeMoved(l)`），原本街區的 slot 1 改由一般補屋填上；資料檔的 region／page／slot 不變（街區圖照舊）。小鎮上：`lakeGate` 放大 `LAKE.K`＝1.5 倍（拱門約 3.6 公尺），後面整格是新的 `voxCity.lakeHill(T, o)`（20 公分一格的岩丘，洞口和隧道那塊空出來），洞口朝南對著海邊步道。居民：`spotFor` 的位置改在隧道深處，`entryOf(id)` 讓 routeTo 先走到洞口再往裡走、離開時從洞口出來；到位後跟室內一樣隱藏（walker 的 indoors 判斷），洞口上方改用 👤 人數牌，地下湖不排站著聊天的位置。走路格子：整座山擋起來，操控時隧道打開；點山的任何地方都會走到洞口進去。
