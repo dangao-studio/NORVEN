@@ -956,3 +956,29 @@ html.dark .mood-chip.mood-blue { background: #2C3140; color: #A9B3C9; }
 .wish-opt { min-height: 48px; font-size: 16px; }
 .wish-done div + div { margin-top: 4px; }
 .wish-log { padding: 12px 14px; }
+
+/* ═════════ 房間 360° 轉、說話特寫 ═════════ */
+.room-rot { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; z-index: 3; }
+.room-rot button { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; font: inherit; font-size: 22px; line-height: 1; color: #3B3F66; background: rgba(255,255,255,.72); box-shadow: 0 2px 8px rgba(0,0,0,.12); cursor: pointer; }
+.room-rot button:active { transform: scale(.94); }
+.ctl-stage .room-rot { top: 8px; bottom: auto; }
+.ctl .room-rot button { min-height: 44px; color: #F4EEE4; background: rgba(22,20,28,.72); }
+.red-stage .room-rot { display: none; }
+/* 上下黑邊：有人說話時從畫面上下滑進來 */
+.room-lb { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.room-lb i { font-style: normal; position: absolute; left: 0; right: 0; height: 0; background: #0B0A0E; transition: height .6s ease; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.room-lb i:first-child { top: 0; }
+.room-lb i:last-child { bottom: 0; }
+.room-lb.on i { height: 11%; }
+.room-lb span { color: #E8DCC4; font-size: 12px; font-weight: 700; letter-spacing: .12em; opacity: 0; transition: opacity .6s ease .3s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 120px); }
+.room-lb.on span { opacity: .85; }
+.room3d:has(.room-lb.on) .room-edit-btn { opacity: 0; pointer-events: none; }
+.room3d:has(.room-lb.on) .room-rot, .ctl-stage:has(.room-lb.on) .room-rot { opacity: .55; }
+.room3d:has(.room-lb.on) .room-rot { bottom: calc(11% + 6px); }
+/* 觀察時有人說話：房間黏在畫面上方，對話在下面捲 */
+.plan-card.on-stage { position: sticky; top: calc(env(safe-area-inset-top) + 6px); z-index: 6; }
+.plan-card.on-stage .room3d { height: 260px; }
+@media (prefers-reduced-motion: reduce) { .room-lb i, .room-lb span { transition: none; } }
+.room-floors { z-index: 3; }
+.room-fp .room-rot, .room-fp .room-lb { display: none; }
+.ctl-stage .room-lb span { display: none; }

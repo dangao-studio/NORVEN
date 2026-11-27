@@ -2,7 +2,7 @@
 
 這是一個手機優先的「小鎮觀察」網頁 App（PWA）。世界觀與 16 位角色是使用者的原創設定（時間融合時代 × 蓋亞聯邦，小鎮「諾文」）。使用者想要的感覺是：**他們在一個地方好好活著**，玩家主要是觀察，偶爾互動。
 
-目前版本：v3.26.2
+目前版本：v3.27.0
 
 ---
 
@@ -232,3 +232,5 @@ node tools/validate.js .      # 檢查行程、地點、事件能不能觸發、
 - v3.26.0：居民的小心願與心情（新檔 `data/wishes.js`、`js/wishes.js`，index.html 與 sw.js 都有列）。`N.mood.pending(ck, where)`：依 dayKeyOf 每天抽 3～5 人，各在 9:00～18:30 之間某個半點冒出一個心願（避開他前兩次聽過的），到 22:00 或睡著就不顯示；回應記在 `slot().wish.done[day][人]`，歷史在 `hist`，回禮在 `thanks`。`moodOf` 的順序：剛回應過（6 小時內）→ 有心事 💭 → autoNeeds 的餓／累 → 交往對象在同一處 💗 → 每 3 小時一次的隨機心情。介面：居民頁上方「💭 有人想找你說話」、居民卡與觀察標題的心情小膠囊、觀察面板與 3D 居民卡的 💭 按鈕、3D 小鎮頭上的 💭（walker.wq，跟著 `state3d().wishes`）、通知（kind "wish"，點了直接開心事）、日誌「💭 心事」、日記優先用回應的 diary、設定「居民會冒出 💭 來找你說心事」（store.wishes）。`pushNews` 的 `quiet` 不跳橫幅。validate.js 會檢查 wishes.js（說話的人、心情、rel 對象、破折號）。順手修：自己跑去找朋友時，觀察面板不再顯示「還會待 16667 分」。
 - v3.26.1：地下湖搬到城邊。`GRID.lakeCell`：舊城河岸街區（LOC.oldtown1）同一欄最南邊、島最外圈那一格，kind 改成 "lake"（不蓋公園，只補四周人行道，手機也蓋）。`lotPos` 對地下湖回傳那一格（`lakeMoved(l)`），原本街區的 slot 1 改由一般補屋填上；資料檔的 region／page／slot 不變（街區圖照舊）。小鎮上：`lakeGate` 放大 `LAKE.K`＝1.5 倍（拱門約 3.6 公尺），後面整格是新的 `voxCity.lakeHill(T, o)`（20 公分一格的岩丘，洞口和隧道那塊空出來），洞口朝南對著海邊步道。居民：`spotFor` 的位置改在隧道深處，`entryOf(id)` 讓 routeTo 先走到洞口再往裡走、離開時從洞口出來；到位後跟室內一樣隱藏（walker 的 indoors 判斷），洞口上方改用 👤 人數牌，地下湖不排站著聊天的位置。走路格子：整座山擋起來，操控時隧道打開；點山的任何地方都會走到洞口進去。
 - v3.26.2：吊床的躺姿方向修正。吊床模型是左右長（x 方向，枕頭在 +x），但 `furn()` 的吊床座位沒有 `face`，躺的人沿用床的方向（沿 z 躺），所以會橫躺在吊床上。現在吊床座位加 `face: -Math.PI / 2`（頭朝枕頭），位置往枕頭挪 0.15 公尺。吊床也放大到能整個人躺平（voxroom `vfurn` 的 hammock：柱子在 ±1.1、布面 1.8 × 0.8、中間低兩頭翹、繩子掛到柱子上）。床本來就是沿 z 長，不受影響；房間的 `rot` 照舊疊加在 yaw 上，所以不管吊床怎麼轉都會對齊。
+- v3.27.0：房間 360° 轉＋透明牆＋說話特寫。voxroom `build()` 在家具擺好、算完 occupancy 之後呼叫 `outerWalls()` 補右牆和前牆（前牆中間門寬 1 公尺、高 2.1 公尺，有門框、門板、門把），所以不影響擺放和走路的格子；`toMeshes(T, G, { side })` 依 `sideOf(x, y, z)` 把四面牆（踢腳板 y≥2 以上）各自做成一組網格（`meshes.walls[L|B|R|F] = { meshes, winMat }`，各自的材質）。L 形房間（`cut`）的內轉角牆算 R、切角的後牆算 B。town3d：`RM.walls`（side、法線 n、op），`wallFade(dt)` 每幀依鏡頭方向把擋住鏡頭的牆淡到 0.08（第一人稱全部實心），淡掉的牆不投影、不寫深度、點擊（ctlTap）略過。`roomFPWalls()` 在有方塊牆時不再另外蓋右牆、前牆，門板改成看不見、只拿來判斷準心對到門。鏡頭：`RM.az`（不再限制在 ±0.55，可以一直轉）、`RM.el`（俯角，滑鼠或 touch-action:none 的畫面上下拖，0.22～1.25）、`RM.zu`（玩家縮放，`setRoomZoom()`）；實際鏡頭 `RM.azC`／`RM.elC` 平滑追過去。說話特寫：`stageInfo()` 拿 `lastState.talking` 裡在這層的人，兩人以上從側面偏 0.32 看、一個人從他面前偏 0.45，縮放依距離算（1.35～3），俯角壓到 0.44、目標偏向說話的人 22%；`RM.stManual`：特寫中玩家自己轉過就不搶。`stageBars()` 在 host 裡加 `.room-lb` 上下黑邊（下方顯示〈標題〉）。新 API：`N.room3d.cue(說話的人, 標題)`（app 的 updateRoom push 和 lineEmote 會呼叫）、`view()`（測試用：az、el、zoom、stage、每面牆透明度）、`rotate(da, el)`。`floorUI()` 加 `.room-rot` ⟲ ⟳（每次 90°），第一人稱時隱藏（host 的 `.room-fp`）。app：觀察中有人說話時平面圖卡片加 `.on-stage`（sticky 黏在上方、房間 260px）。
+- v3.27.0（續）：貼牆的家具跟著牆一起變透明。voxroom `build()` 記下每件家具的方塊（`wallItems`），`withWallItems()` 包住 `outerWalls()` 的 sideOf：掛牆裝飾（`WALLHANG`）離牆 0.4 公尺內、其他東西離牆 0.2 公尺內且高過 1.1 公尺（書櫃、衣櫃）就算那面牆；長邊沿 x 的只貼後／前牆、沿 z 的只貼左／右牆（L 形房間內轉角附近才不會判錯）。淡掉的牆透明度改成 0.03。
