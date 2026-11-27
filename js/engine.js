@@ -55,6 +55,7 @@ NOVUM.engine = (function () {
       const as = assigns && assigns[c.id];
       if (as && as.until > now && r.avail) {
         r = { loc: as.loc, act: as.act || "照安排在這裡逛逛", avail: true, assigned: true, until: as.until };
+        if (as.use) { r.use = as.use; r.self = true; if (as.floor != null) r.floor = as.floor; }   // 自己去做某件事（js/doings.js）
       }
       if (override && override.cast.indexOf(c.id) >= 0) {
         r = Object.assign({}, r, { loc: override.loc, act: "正在和" + override.cast.filter(x => x !== c.id).join("、") + "說話", avail: true, locked: true });

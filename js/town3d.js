@@ -669,7 +669,7 @@
         break; }
       case "counter":
         fb(g, 1.6, 0.85, 0.55, c, 0, 0, 0); fb(g, 1.7, 0.06, 0.65, 0xD8CBB8, 0, 0.85, 0);
-        for (const x of [-0.45, 0.45]) { cyl(g, 0.16, 0.16, 0.05, 0x3B3F4A, x, 0.6, 0.6); cyl(g, 0.03, 0.03, 0.6, 0x3B3F4A, x, 0, 0.6); sp.push({ x, z: 0.62, pose: "sit", tag: "eat", y: o.low ? 0.46 : 0.66, face: Math.PI }); }
+        for (const x of [-0.45, 0.45]) { cyl(g, 0.16, 0.16, 0.05, 0x3B3F4A, x, 0.6, 0.6); cyl(g, 0.03, 0.03, 0.6, 0x3B3F4A, x, 0, 0.6); sp.push({ x, z: 0.62, pose: "sit", tag: "eat", y: o.low ? 0.46 : 0.66, face: Math.PI, use: null }); }
         sp.push({ x: 0, z: -0.55, pose: "stand", tag: "cook", y: 0 });
         for (let i = 0; i < 3; i++) cyl(g, 0.08, 0.08, 0.14, [0xE8A87C, 0xC0603F, 0xF4F0E8][i], -0.5 + i * 0.35, 0.91, -0.1);
         break;
@@ -746,7 +746,7 @@
       case "newsstand":
         fb(g, 1.4, 0.8, 0.5, 0x6B5A4A, 0, 0, 0);
         for (let i = 0; i < 6; i++) { const m = fb(g, 0.18, 0.24, 0.02, [0xC0603F, 0x4A6FA5, 0xE0B54A, 0x2F8A6A, 0xD98AA0, 0x7C5CC4][i], -0.55 + i * 0.22, 0.82, 0.05); m.rotation.x = -0.4; }
-        sp.push({ x: 0, z: -0.5, pose: "stand", tag: "cook", y: 0 }); break;
+        sp.push({ x: 0, z: -0.5, pose: "stand", tag: "cook", y: 0, use: null }); break;
       case "clothes":
         cyl(g, 0.02, 0.02, 1.4, 0x9A9A9A, -0.5, 0, 0); cyl(g, 0.02, 0.02, 1.4, 0x9A9A9A, 0.5, 0, 0); fb(g, 1.05, 0.03, 0.03, 0x9A9A9A, 0, 1.38, 0);
         for (let i = 0; i < 5; i++) fb(g, 0.16, 0.55, 0.3, [0xC2455A, 0x4A6FA5, 0xF2C14E, 0x2F5D50, 0xE8DCC8][i], -0.36 + i * 0.18, 0.8, 0);
@@ -774,13 +774,29 @@
       case "magicdesk": sp.push({ x: 0, z: 0.55, pose: "sit", tag: "study", y: 0.42 }); break;
       case "typewriter": sp.push({ x: 0, z: 0.45, pose: "stand", tag: "study", y: 0 }); break;
       case "altar": case "oven": case "arm": sp.push({ x: 0, z: 0.7, pose: "stand", tag: type === "oven" ? "cook" : "work", y: 0 }); break;
-      case "stall": sp.push({ x: 0, z: -0.6 * (o.k || 1), pose: "stand", tag: "cook", y: 0 }); break;
+      case "stall": sp.push({ x: 0, z: -0.6 * (o.k || 1), pose: "stand", tag: "cook", y: 0, use: null }); break;
       case "crates":
         fb(g, 0.6, 0.5, 0.6, 0x9C7A55, 0, 0, 0); fb(g, 0.5, 0.4, 0.5, 0x8A6A4A, 0.1, 0.5, -0.05); fb(g, 0.45, 0.45, 0.45, 0x9C7A55, 0.6, 0, 0.1);
         break;
+      // 可以自己去用的東西（data/doings.js）：坐的位置
+      case "fountain": { const r = 0.8 * (o.k || 1) - 0.06; sp.push({ x: 0, z: r, pose: "sit", tag: "relax", y: 0.3 * (o.k || 1), face: 0, use: "fountain" }, { x: 0, z: -r, pose: "sit", tag: "relax", y: 0.3 * (o.k || 1), face: Math.PI, use: "fountain" }); break; }
+      case "swing": for (const x of [-0.45, 0.45]) sp.push({ x, z: 0, pose: "sit", tag: "relax", y: 0.5, face: 0, use: "swing" }); break;
+      case "picnic": for (const x of [-0.42, 0.42]) sp.push({ x, z: 0.1, pose: "sit", tag: "eat", y: 0.22, face: 0, use: "picnic" }); break;
+      case "dock": { const l = o.l || 1.6; for (const x of [-0.2, 0.2]) sp.push({ x, z: -l / 2 + 0.25, pose: "sit", tag: "relax", y: 0.32, face: Math.PI, use: "fish" }); break; }
+      case "telescope": sp.push({ x: 0, z: -0.42, pose: "stand", tag: "use", y: 0, face: 0, use: "stars" }); break;
+      case "viewer": sp.push({ x: 0, z: -0.45, pose: "stand", tag: "use", y: 0, face: 0, use: "viewer" }); break;
+    }
+    // 站在前面用的東西：販賣機、書報攤、公布欄、井、攤子、書櫃、唱盤、魚缸……（數字是家具正面離中心多遠，戶外放大的照比例）
+    const fr = FRONT_USE[type], DU = N.doings || {};
+    if (fr != null && DU.useOf && DU.useOf[type]) sp.push({ x: 0, z: fr * (o.k || 1) + 0.36, pose: "stand", tag: "use", y: 0, face: Math.PI, use: DU.useOf[type] });
+    for (const q of sp) {
+      if (q.use === undefined) q.use = (DU.useOf && DU.useOf[type]) || null;
+      if (q.use && !q.anim && DU.uses && DU.uses[q.use]) q.anim = DU.uses[q.use].anim;
     }
     return sp;
   }
+  const FRONT_USE = { vending: 0.3, newsstand: 0.35, board: 0.1, well: 0.4, stall: 0.35, shelf: 0.32, record: 0.2, tank: 0.4, vanity: 0.2, mirror: 0.1, fireplace: 0.45,
+    cauldron: 0.3, perch: 0.1, catbed: 0.2, fridge: 0.3, snacks: 0.2, clothes: 0.2, globe: 0.15, dimbox: 0.25, arcade: 0.3, kettle: 0.2, tackle: 0.2, claw: 0.4 };
   const furnMats = {};
   /* ═════════ 體素風格 ═════════
    * 1. 材質：表面依世界座標切成一格一格的方塊，每格顏色略有深淺，格線微暗；牆腳、家具腳有接觸陰影（AO）。
@@ -973,7 +989,7 @@
       ig.add(item);
       for (const sp of furn(type, o, item)) {
         const wx = x + sp.x * Math.cos(a) + sp.z * Math.sin(a), wz = z - sp.x * Math.sin(a) + sp.z * Math.cos(a);
-        L.spots.push({ x: L.x + wx, z: L.z + wz, pose: sp.pose, tag: sp.tag, y: sp.y, owner: sp.owner, yaw: a + faceOf(sp) });
+        L.spots.push({ x: L.x + wx, z: L.z + wz, pose: sp.pose, tag: sp.tag, y: sp.y, owner: sp.owner, yaw: a + faceOf(sp), use: sp.use, anim: sp.anim });
       }
     }
     ig.traverse(m => { if (m.isMesh) m.material = warmMat(m.material); });
@@ -993,8 +1009,11 @@
     const out = {}, used = new Set(), sp = L.spots;
     const take = (id, pred) => { const i = sp.findIndex((s, k) => !used.has(k) && pred(s)); if (i < 0) return false; used.add(i); out[id] = sp[i]; return true; };
     const sleepers = ids.filter(id => !where[id].avail), awake = ids.filter(id => where[id].avail);
+    // 自己選了要做某件事的人先挑（data/doings.js 的 use）；別人的床不睡
+    for (const id of awake) { const u = where[id].use; if (u) take(id, s => s.use === u && (!s.owner || s.owner === id)); }
     for (const id of sleepers) take(id, s => s.tag === "sleep" && s.owner === id) || take(id, s => s.tag === "sleep" && !s.owner) || take(id, s => s.tag === "relax");
     for (const id of awake) {
+      if (out[id]) continue;
       const t = tagOf(where[id]);
       take(id, s => s.tag === t) || take(id, s => s.tag === "relax") || take(id, s => s.tag === "eat" || s.tag === "study");
     }
@@ -3152,7 +3171,7 @@
       for (const sp of furn(type, o, dummy)) {
         const wx = x + sp.x * Math.cos(a) + sp.z * Math.sin(a), wz = z - sp.x * Math.sin(a) + sp.z * Math.cos(a);
         const top = (sp.pose === "sit" || sp.pose === "lie") ? vr.topAt(wx, wz, sp.pose === "lie" ? 0.8 : 0.75) : 0;
-        out.push({ x: wx, z: wz, pose: sp.pose, tag: sp.tag, y: top > 0.15 ? top : sp.y, owner: sp.owner, yaw: a + faceOf(sp) });
+        out.push({ x: wx, z: wz, pose: sp.pose, tag: sp.tag, y: top > 0.15 ? top : sp.y, owner: sp.owner, yaw: a + faceOf(sp), use: sp.use, anim: sp.anim });
       }
     }
     while (dummy.children.length) { const c = dummy.children.pop(); if (c.geometry) c.geometry.dispose(); }
@@ -3715,6 +3734,13 @@
    * 方向鍵／WASD／虛擬搖桿：直接走 */
   const SPOT_ACT = { sleep: ["😴", "睡一下", "在這裡睡一下"], relax: ["🛋️", "坐著休息", "坐著放空休息"], eat: ["🍽️", "吃點東西", "坐下來吃點東西"],
     study: ["📖", "讀書寫字", "坐下來讀書、寫東西"], work: ["🔧", "動手做事", "在工作台忙著做東西"], cook: ["🍳", "下廚", "在爐台前做吃的"], drum: ["🥁", "打鼓", "打了一段鼓"] };
+  // 圓環選單上的字：有 use 的用 data/doings.js 的說法（買罐飲料、盪鞦韆……），他不會碰的東西不列
+  function spotAct(sp, id) {
+    const D = N.doings, U = sp.use && D && D.uses[sp.use];
+    if (U && !useOK(id, sp.use)) return sp.tag === "use" ? null : SPOT_ACT[sp.tag] || SPOT_ACT.relax;
+    if (U) return [U.icon, U.label, U.act];
+    return sp.tag === "use" ? null : SPOT_ACT[sp.tag] || SPOT_ACT.relax;
+  }
   function ctlPerson() { return RM.ctl && RM.ppl[RM.ctl.id]; }
   function ctlSet(id, hooks) {
     if (!id) { if (RFP.on || RFP.want) roomFPSet(false); if (RM.ctl) { const p = RM.ppl[RM.ctl.id]; if (p) { p.manual = 0; p.ctlInit = false; } setRoomZoom(1); } RM.ctl = null; return; }
@@ -3744,8 +3770,7 @@
     const near = RM.spots.map(sp => [sp, Math.hypot(sp.x - pt.x, sp.z - pt.z)]).filter(([, d]) => d < 0.9).sort((a, b) => a[1] - b[1]);
     const opts = [], seen = new Set();
     for (const [sp] of near) {
-      if (seen.has(sp.tag)) continue; seen.add(sp.tag);
-      const A = SPOT_ACT[sp.tag] || SPOT_ACT.relax;
+      const A = spotAct(sp, RM.ctl.id); if (!A || seen.has(A[1])) continue; seen.add(A[1]);
       opts.push({ icon: A[0], label: A[1], act: A[2], spot: sp });
     }
     if (opts.length && pt.y > 0.12 && H.onSpot) return H.onSpot(opts, cx, cy);
@@ -3759,7 +3784,7 @@
     let dest = target;
     if (!spot) { const f = nearestFree(...cellOf(target)); dest = posOf(f[0], f[1]); }
     p.path = roomPath(p.pos, dest); p.dest = dest.clone();
-    p.destPose = spot ? spot.pose : "stand"; p.destY = spot ? spot.y : 0; p.destYaw = spot ? spot.yaw : null;
+    p.destPose = spot ? spot.pose : "stand"; p.destY = spot ? spot.y : 0; p.destYaw = spot ? spot.yaw : null; p.actTag = spot && spot.pose ? (spot.anim || spot.tag) : null;
     if (RM.lastState) roomUpdate(RM.lastState);
   }
   function ctlApproach(bid) {
@@ -3774,7 +3799,7 @@
   function ctlStep(p, dt) {
     const c = RM.ctl, m = Math.hypot(c.vx, c.vz);
     if (m < 0.15) { if (p.manual) { p.manual = 0; p.dest = p.pos.clone(); } return; }
-    if (c.spot || p.path.length) { c.spot = null; p.path = []; p.destPose = "stand"; p.destY = 0; p.destYaw = null; }
+    if (c.spot || p.path.length) { c.spot = null; p.path = []; p.destPose = "stand"; p.destY = 0; p.destYaw = null; p.actTag = null; }
     // 畫面方向換成房間座標（鏡頭從右前方 45° 看過來；第一人稱照視線方向）
     const a = RFP.on ? RFP.yaw : Math.PI / 4 + (RM.azC != null ? RM.azC : RM.az), rx = Math.cos(a), rz = -Math.sin(a), fx = -Math.sin(a), fz = -Math.cos(a);
     let dx = (c.vx * rx - c.vz * fx), dz = (c.vx * rz - c.vz * fz);
@@ -3848,7 +3873,7 @@
       let dest = tp ? tp.pos.clone() : seat ? new T.Vector3(seat.x, 0, seat.z) : (p && p.wdest ? p.wdest.clone() : standAt(free.indexOf(id)));
       if (!seat && !tp && RM.occ) { const f = nearestFree(...cellOf(dest)); dest = posOf(f[0], f[1]); }
       if (!p) { p = RM.ppl[id] = roomPerson(N.characters.find(c => c.id === id)); p.pos = dest.clone(); p.path = []; }
-      p.free = !seat && !tp; if (!p.free) p.wdest = null;
+      p.free = !seat && !tp; if (!p.free) { p.wdest = null; p.wspot = null; }
       if (id === cid) {   // 操控中：位置、姿勢都由玩家決定
         if (!p.ctlInit) { p.ctlInit = true; p.path = []; if (RM.occ) { const f = nearestFree(...cellOf(p.pos)); p.pos.copy(posOf(f[0], f[1])); } p.dest = p.pos.clone(); p.destPose = "stand"; p.destY = 0; p.destYaw = null; }
         p.zz.visible = false; p.asleep = false; p.st.visible = !!(s.talking && s.talking.has(id)); p.ring.visible = true;
@@ -3860,8 +3885,9 @@
       const dk = dest.x.toFixed(2) + "," + dest.z.toFixed(2);
       if (p.destKey !== dk) { p.destKey = dk; p.sepOff = null; p.path = p.pos.distanceTo(dest) > 0.05 ? roomPath(p.pos, dest) : []; }
       p.dest = !seat && p.sepOff ? dest.clone().add(p.sepOff) : dest; p.destPose = seat ? seat.pose : "stand"; p.destY = seat ? seat.y : 0; p.destYaw = tp ? tp.yaw : seat ? seat.yaw : null;
-      p.actTag = seat ? seat.tag : null;
-      const asleep = !s.where[id].avail;
+      p.actTag = seat ? (seat.anim || seat.tag) : p.free && p.wspot ? p.wspot.anim || null : null;
+      if (!seat && !tp && p.free && p.wspot) p.destYaw = p.wspot.yaw;
+      const asleep = !s.where[id].avail || (s.where[id].use === "nap" && !!seat && seat.pose === "lie");
       p.zz.visible = asleep; p.asleep = asleep;
       p.st.visible = !asleep && ((s.talking && s.talking.has(id)) || (s.hints && s.hints.has(id)));
       p.ring.visible = s.observing === id;
@@ -3904,7 +3930,15 @@
   // 沒有家具可用、也沒在說話的人：在房間裡隨便走走，停一陣子再換個地方
   function roomWander(p, tt) {
     if (!p.free || p.asleep || !RM.occ || tt < (p.wanderAt || 0)) return;
-    p.wanderAt = tt + 14 + Math.random() * 26;
+    p.wanderAt = tt + 14 + Math.random() * 26; p.wspot = null;
+    // 有時候走去用房間裡的東西：翻書櫃、看魚缸、放唱片、摸貓……（只用他會碰的東西）
+    const busy = new Set(Object.values(RM.ppl).filter(q => q !== p && q.wspot).map(q => q.wspot));
+    const cands = RM.spots.filter(sp => sp.tag === "use" && sp.pose === "stand" && !busy.has(sp) && !(RM.ctl && RM.ctl.spot === sp) && useOK(p.id, sp.use));
+    if (cands.length && Math.random() < 0.4) {
+      const sp = cands[Math.floor(Math.random() * cands.length)];
+      p.wspot = sp; p.wdest = new T.Vector3(sp.x, 0, sp.z); p.dest = p.wdest.clone(); p.destKey = null; p.path = roomPath(p.pos, p.dest); p.destYaw = sp.yaw;
+      p.wanderAt = tt + 18 + Math.random() * 22; return;
+    }
     for (let k = 0; k < 20; k++) {
       const v = new T.Vector3((Math.random() - 0.5) * (RM.W - 1.2), 0, (Math.random() - 0.5) * (RM.D - 1.2));
       const [cx, cz] = cellOf(v); if (occAt(cx, cz)) continue;
@@ -3912,11 +3946,18 @@
       return;
     }
   }
+  // 這個人會不會去碰這件東西（別人的鼓組、魔藥鍋不碰；data/doings.js 的 only、no）
+  function useOK(id, use) {
+    const D = N.doings; if (!D || !use || !D.uses[use]) return false;
+    const U = D.uses[use]; if (U.only && U.only.indexOf(id) < 0) return false;
+    return !(D.no && D.no[id] && D.no[id].indexOf(use) >= 0);
+  }
   function roomEmote(id, name) { const p = RM.ppl[id]; if (p && p.ch && p.ch.emote) p.ch.emote(name); }
   function floorsOf(id) { const e = N.interiors && N.interiors[id]; return !e ? [{ items: [] }] : Array.isArray(e) ? [{ items: e }] : e.floors || [e]; }
   function floorOf(locId, w) {
     const fl = floorsOf(locId); if (fl.length < 2) return 0;
     if (!w.avail) return 1;
+    if (w.floor != null) return Math.min(fl.length - 1, w.floor);
     return fl[1].match && new RegExp(fl[1].match).test(w.act || "") ? 1 : 0;
   }
   function floorUI() {
@@ -3972,7 +4013,7 @@
     ["rug", "地毯", { w: 1.4, d: 1, c: 0xC8A882 }], ["plant", "盆栽"], ["flowers", "花"], ["lamp", "立燈"], ["candles", "蠟燭"], ["fireplace", "壁爐"],
     ["clock", "掛鐘"], ["frames", "相框"], ["wallshelf", "壁架"], ["sconce", "壁燈"], ["hangplant", "吊盆"], ["pots", "小盆栽"], ["poster", "海報"], ["board", "白板"], ["map", "地圖"], ["globe", "地球儀"], ["telescope", "望遠鏡"], ["record", "唱盤"],
     ["drums", "鼓組"], ["catbed", "貓窩"], ["boxes", "紙箱"], ["crates", "木箱"], ["skulls", "頭骨"], ["crystal", "水晶"], ["cauldron", "魔藥鍋"],
-    ["vending", "販賣機"], ["bench", "長椅"], ["tree", "樹"], ["bush", "灌木"], ["streetlamp", "路燈"], ["fountain", "噴泉"]
+    ["vending", "販賣機"], ["claw", "夾娃娃機"], ["arcade", "街機"], ["kettle", "茶水櫃"], ["tackle", "釣具箱"], ["swing", "鞦韆"], ["picnic", "野餐墊"], ["viewer", "投幣望遠鏡"], ["bench", "長椅"], ["tree", "樹"], ["bush", "灌木"], ["streetlamp", "路燈"], ["fountain", "噴泉"]
   ];
   const FNAME = Object.assign({ menuboard: "菜單板", stairs: "樓梯", pans: "鍋具", catbed: "貓窩", herbs: "香草", lanterns: "燈籠", sign: "招牌", stall: "攤位", machine: "機器",
     servers: "伺服器", cables: "電線", ledstrip: "燈條", ritual: "法陣", dimbox: "異次元箱", labelwall: "標籤牆", junk: "雜物", hammock: "吊床", scrolls: "卷軸", altar: "祭壇",
@@ -4244,15 +4285,27 @@
       const stands = L0 && L0.plat ? L0.plat.stand : [];
       const underground = L0 && L0.type === "lake" && GRID.lakeCell;
       const talkers = underground ? [] : ids.filter(id => tset.has(id) && s.where[id].avail), talk = townTalkPos(loc, talkers, s);
-      let si = 0;
+      // 自己選了要做某件事的人（鞦韆、販賣機、噴泉邊……，data/doings.js）先占好那個位置
+      const allSp = L0 && L0.plat ? L0.plat.spots : [], usedSp = new Set(), useSeat = {};
+      ids.forEach(id => {
+        const u = s.where[id].use; if (!u || talk[id] || !s.where[id].avail) return;
+        const sp = allSp.find(q => q.use === u && !usedSp.has(q)); if (sp) { usedSp.add(sp); useSeat[id] = sp; }
+      });
+      const seatQ = seatList.map((_, k) => seatList[(off + k) % seatList.length]).filter(q => !usedSp.has(q));
       ids.forEach((id, i0) => {
         const tp = talk[id], sitter = !tp && s.where[id].avail && SIT_RE.test(s.where[id].act || "");
-        const seat = sitter && si < seatList.length ? seatList[(off + si++) % seatList.length] : null;
+        let seat = useSeat[id] || (sitter && seatQ.length ? seatQ.shift() : null);
+        if (seat) usedSp.add(seat);
+        // 沒事站著的人：偶爾走去用旁邊的東西（翻雜誌、買飲料、看公布欄、逛攤子），每 40 秒重新決定一次
+        if (!seat && !tp && s.where[id].avail && allSp.length && hashStr(id + "|" + bucket) % 3 === 0) {
+          const us = allSp.filter(q => q.tag === "use" && q.pose === "stand" && !usedSp.has(q) && useOK(id, q.use));
+          if (us.length) { seat = us[hashStr(id) % us.length]; usedSp.add(seat); }
+        }
         const st = !seat && !tp && stands.length ? stands[(hashStr(id) + bucket * 7 + i0 * 3) % stands.length] : null;
         const wk = walkers[id], dest = tp ? tp.pos.clone() : seat ? new T.Vector3(seat.x, 0, seat.z) : st ? new T.Vector3(st[0], 0, st[1]) : spotFor(loc, i0, ids.length);
         wk.destPose = seat ? seat.pose : "stand"; wk.destY = seat ? seat.y : 0; wk.destYaw = tp ? tp.yaw : seat ? seat.yaw : null;
-        wk.actTag = seat ? seat.tag : null;
-        wk.asleep = !s.where[id].avail && !early[id];
+        wk.actTag = seat ? (seat.anim || seat.tag) : null;
+        wk.asleep = (!s.where[id].avail && !early[id]) || (s.where[id].use === "nap" && !!seat && seat.pose === "lie");
         if (firstPlace || !wk.loc) { wk.pos.copy(dest); wk.g.position.copy(dest); wk.loc = loc; wk.path = []; wk.dest = dest; return; }
         if (wk.loc !== loc) {
           const far = wk.pos.distanceTo(dest);
@@ -4527,7 +4580,7 @@
     const path = wPath(w.pos, target);
     if (!path) return;
     w.path = path; w.dest = (path[path.length - 1] || w.pos).clone(); w.speed = shiftDown ? TRUN : TSPEED;
-    w.destPose = TC.spot ? TC.spot.pose : "stand"; w.destY = TC.spot ? TC.spot.y : 0; w.destYaw = TC.spot ? TC.spot.yaw : null;
+    w.destPose = TC.spot ? TC.spot.pose : "stand"; w.destY = TC.spot ? TC.spot.y : 0; w.destYaw = TC.spot ? TC.spot.yaw : null; w.actTag = TC.spot ? (TC.spot.anim || TC.spot.tag) : null;
     if (TC.spot) { w.path.push(new T.Vector3(TC.spot.x, 0, TC.spot.z)); w.dest = w.path[w.path.length - 1].clone(); }
     cam.follow = TC.id; cam.fly = null;
   }
@@ -4543,7 +4596,7 @@
     const spots = []; for (const id in lots) { const P = lots[id].plat; if (P) spots.push(...P.spots); }
     const near = spots.map(sp => [sp, Math.hypot(sp.x - q.x, sp.z - q.z)]).filter(([, d]) => d < 0.55).sort((a, b) => a[1] - b[1]);
     const opts = [], seen = new Set();
-    for (const [sp] of near) { if (seen.has(sp.tag)) continue; seen.add(sp.tag); const A = SPOT_ACT[sp.tag] || SPOT_ACT.relax; opts.push({ icon: A[0], label: A[1], act: A[2], spot: sp }); }
+    for (const [sp] of near) { const A = spotAct(sp, TC.id); if (!A || seen.has(A[1])) continue; seen.add(A[1]); opts.push({ icon: A[0], label: A[1], act: A[2], spot: sp }); }
     if (opts.length && H.onSpot) return H.onSpot(opts, cx, cy);
     // 點到房子：走到它的門口，然後進去
     const gh = rc.intersectObjects(Object.values(lots).filter(L => !L.open).map(L => L.group), true);
@@ -4566,7 +4619,7 @@
     const w = walkers[TC.id]; if (!w) return;
     const m = Math.hypot(TC.vx, TC.vz);
     if (m > 0.15) {
-      if (w.path.length || TC.spot) { w.path = []; TC.spot = null; w.destPose = "stand"; w.destY = 0; w.destYaw = null; }
+      if (w.path.length || TC.spot) { w.path = []; TC.spot = null; w.destPose = "stand"; w.destY = 0; w.destYaw = null; w.actTag = null; }
       const az0 = FP.on ? FP.yaw : cam.az, sa = Math.sin(az0), ca = Math.cos(az0);
       let dx = TC.vx * ca - TC.vz * -sa, dz = TC.vx * -sa - TC.vz * -ca;   // 右 = (cos, −sin)，前 = (−sin, −cos)
       const L = Math.hypot(dx, dz) || 1, sp = (shiftDown ? TRUN : TSPEED) * Math.min(1, m) * dt;
