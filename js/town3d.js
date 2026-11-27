@@ -2988,7 +2988,7 @@
 
 
   /* ═════════ 平面圖：等角小房間 ═════════ */
-  const RM = { floor: 0, autoFloor: false, lastState: null, renderer: null, scene: null, camera: null, group: null, host: null, loc: null, ppl: {}, running: false, raf: 0, az: 0, hooks: {}, W: 4.4, D: 3.8, spots: [], last: 0, sun: null, hemi: null, lamp: null };
+  const RM = { floor: 0, autoFloor: false, lastState: null, renderer: null, scene: null, camera: null, group: null, host: null, loc: null, ppl: {}, running: false, raf: 0, az: 0, el: 0.62, hooks: {}, W: 4.4, D: 3.8, spots: [], last: 0, sun: null, hemi: null, lamp: null };
   const roomType = id => { const l = E_loc(id); return l ? typeOf(l) : "house"; };
   function roomSize(id) {
     const t = roomType(id);
@@ -3101,6 +3101,13 @@
     RM.spec = vr.spec;                     // 自動擺放的家具已經有了位置
     RM.ceilLights.forEach(L => L.color.set(th.lampC || 0xFFD6A0));
     for (const k of ["solid", "glow", "win"]) if (vr.meshes[k]) g.add(vr.meshes[k]);
+    // 四面牆各自一組：擋住鏡頭的那面會慢慢變透明（見 wallFade）
+    RM.walls = [];
+    const WN = { L: [-1, 0], R: [1, 0], B: [0, -1], F: [0, 1] };
+    for (const k in vr.meshes.walls || {}) {
+      const w = vr.meshes.walls[k]; w.meshes.forEach(m => g.add(m));
+      RM.walls.push({ side: k, n: WN[k], meshes: w.meshes, winMat: w.winMat, op: 1 });
+    }
     RM.occ = vr.occ;
     RM.winMat = vr.meshes.winMat;
     // 座位：沿用 furn() 算出來的位置（幾何丟掉不用）
@@ -3189,7 +3196,9 @@
       if (L.userData.ceil) { L.intensity = budget * 0.7 / ceilN * mainK; L.distance = 7; L.decay = 1; }
       else { L.intensity = Math.min(0.45, budget * 0.3 / accN) * accK; L.distance = 3.2; L.decay = 1; }
     });
-    if (RM.winMat) RM.winMat.color.set(dark ? 0x3A3A5A : new T.Color(0xFFE6A8).lerp(new T.Color(0x2A3256), nf).getHex());
+    const winC = dark ? 0x3A3A5A : new T.Color(0xFFE6A8).lerp(new T.Color(0x2A3256), nf).getHex();
+    if (RM.winMat) RM.winMat.color.set(winC);
+    for (const w of RM.walls || []) w.winMat.color.set(winC);
     RM.scene.background = null;
     // 背景：白天是暖亮的米色，黃昏轉橘，夜裡回到深黑
     if (RM.host) {
@@ -3286,14 +3295,19 @@
     // 一面牆：下半護牆板、一條飾條、上半牆面
     const wallX = (x, z0, z1) => { const L = z1 - z0, zc = (z0 + z1) / 2; slab(0.2, wy, L, x, -0.1, zc, wain); slab(0.22, 0.06, L, x, wy - 0.1, zc, trim); slab(0.2, H - wy + 0.04, L, x, wy - 0.06, zc, wall); };
     const wallZ = (z, x0, x1) => { const L = x1 - x0, xc = (x0 + x1) / 2; slab(L, wy, 0.2, xc, -0.1, z, wain); slab(L, 0.06, 0.22, xc, wy - 0.1, z, trim); slab(L, H - wy + 0.04, 0.2, xc, wy - 0.06, z, wall); };
-    const cd = th.cut ? th.cut[1] : 0;
-    wallX(W / 2 + 0.1, -D / 2 + cd - 0.2, D / 2 + 0.2);
-    // 前牆：中間一扇門（門框＋門板＋門把）
+    const cd = th.cut ? th.cut[1] : 0, vox = RM.walls && RM.walls.some(w => w.side === "F");
     const dw = 1.0, dh = 2.1;
-    wallZ(D / 2 + 0.1, -W / 2 - 0.2, -dw / 2); wallZ(D / 2 + 0.1, dw / 2, W / 2 + 0.2);
-    slab(dw, H - dh, 0.2, 0, dh - 0.0, D / 2 + 0.1, wall);
-    slab(dw + 0.16, 0.08, 0.26, 0, dh, D / 2 + 0.1, trim); for (const sx of [-1, 1]) slab(0.08, dh, 0.26, sx * (dw / 2 + 0.04), 0, D / 2 + 0.1, trim);
-    const door = slab(dw - 0.04, dh - 0.02, 0.06, 0, 0, D / 2 + 0.12, 0x6A4A30); door.userData.door = true; RFP.door = door; slab(0.06, 0.06, 0.08, dw * 0.35, 1.0, D / 2 + 0.06, 0xD8A840);
+    if (!vox) {
+      wallX(W / 2 + 0.1, -D / 2 + cd - 0.2, D / 2 + 0.2);
+      // 前牆：中間一扇門（門框＋門板＋門把）
+      wallZ(D / 2 + 0.1, -W / 2 - 0.2, -dw / 2); wallZ(D / 2 + 0.1, dw / 2, W / 2 + 0.2);
+      slab(dw, H - dh, 0.2, 0, dh - 0.0, D / 2 + 0.1, wall);
+      slab(dw + 0.16, 0.08, 0.26, 0, dh, D / 2 + 0.1, trim); for (const sx of [-1, 1]) slab(0.08, dh, 0.26, sx * (dw / 2 + 0.04), 0, D / 2 + 0.1, trim);
+      slab(0.06, 0.06, 0.08, dw * 0.35, 1.0, D / 2 + 0.06, 0xD8A840);
+    }
+    // 門板：方塊牆已經有門了，這塊只拿來判斷「準心對到門」（看不見）
+    const door = slab(dw - 0.04, dh - 0.02, 0.06, 0, 0, D / 2 + (vox ? 0.02 : 0.12), 0x6A4A30); door.userData.door = true; RFP.door = door;
+    if (vox) door.material.visible = false;
     // 天花板
     slab(W + 0.6, 0.12, D + 0.6, 0, H, 0, cap);
     RFP.extra = g; RM.scene.add(g);
@@ -3302,6 +3316,7 @@
     if (!RM.renderer || !ctlPerson() || !ctlPerson().pos) { RFP.want = !!on; if (!on) RFP.on = false; return RFP.want; }   // 還沒準備好：等房間和人出現再切
     if (on && RM.theme && RM.theme.outdoor && !RM.theme.dark) on = false;
     RFP.on = !!on; RFP.want = !!on;
+    if (RM.host) RM.host.classList.toggle("room-fp", RFP.on);
     if (RFP.on) {
       if (!RFP.cam) RFP.cam = new T.PerspectiveCamera(72, 1, 0.05, 60);
       roomFPWalls();
@@ -3349,17 +3364,87 @@
     if (a.kind === "person") { if (H.onPerson) H.onPerson(a.id, cx, cy); }
     else if (H.onSpot) H.onSpot(a.opts, cx, cy);
   }
-  function placeRoomCam() {
+  /* ═════════ 房間鏡頭：可以 360° 轉、上下俯仰；有人在說話時自動拉近成「小劇場」 ═════════
+   * RM.az：玩家轉的角度（0＝從右前方 45° 看），RM.el：俯角，RM.zu：玩家的縮放
+   * RM.azC／RM.elC：鏡頭實際的角度（平滑地追過去） */
+  const angD = (a, b) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
+  function setRoomZoom(z) { RM.zu = z; RM.camera.zoom = z; RM.camera.updateProjectionMatrix(); }
+  // 正在說話的人（在這一層、已經有位置）：鏡頭要對著他們
+  function stageInfo() {
+    const s = RM.lastState; if (RM.edit || RFP.on || !s || !s.talking || !s.talking.size) return null;
+    const ids = [...s.talking].filter(id => RM.ppl[id] && RM.ppl[id].pos && RM.ppl[id].g.visible !== false);
+    if (!ids.length) return null;
+    const P = ids.map(id => RM.ppl[id]), at = p => p.dest || p.pos;
+    const c = new T.Vector3(); P.forEach(p => c.add(p.pos)); c.multiplyScalar(1 / P.length);
+    // 還在走過來的時候用現在的位置算（先拉遠一點，走近了再推近）
+    let spread = 0; for (const a of P) for (const b of P) spread = Math.max(spread, at(a).distanceTo(at(b)), a.pos.distanceTo(b.pos));
+    // 鏡頭方向：兩個人的話從側面看（看得到兩張臉），一個人就從他面前偏一點看
+    const cur = Math.PI / 4 + (RM.azC != null ? RM.azC : RM.az);
+    let a;
+    if (P.length >= 2) {
+      const d = at(P[1]).clone().sub(at(P[0])), base = Math.atan2(-d.z, d.x);
+      const c1 = base, c2 = base + Math.PI, pick = Math.abs(angD(cur, c1)) < Math.abs(angD(cur, c2)) ? c1 : c2;
+      a = pick + Math.sign(angD(pick, cur) || 1) * 0.32;
+    } else a = (P[0].yaw || 0) + 0.45;
+    const sp = RM.speaker && RM.ppl[RM.speaker] && ids.includes(RM.speaker) ? RM.ppl[RM.speaker].pos : null;
+    if (sp) c.lerp(sp, 0.22);
+    const cam = RM.camera, vh = cam.top - cam.bottom, vw = cam.right - cam.left;
+    const zoom = Math.max(1.35, Math.min(3.0, Math.min(vh / (spread * 0.9 + 2.3), vw / (spread + 2.0))));
+    return { key: ids.join("|"), c, a, zoom };
+  }
+  function stageBars(on) {
+    if (!RM.host) return;
+    let lb = RM.host.querySelector(".room-lb");
+    if (!lb) { lb = document.createElement("div"); lb.className = "room-lb"; lb.innerHTML = "<i></i><i><span></span></i>"; RM.host.appendChild(lb); }
+    lb.classList.toggle("on", !!on);
+    const t = lb.querySelector("span"); if (t && t.textContent !== (RM.stageTitle || "")) t.textContent = RM.stageTitle || "";
+  }
+  function placeRoomCam(dt) {
     if (RFP.want && !RFP.on && ctlPerson() && ctlPerson().pos) roomFPSet(true);
     if (RFP.on && roomFPCam()) return;
-    const a = Math.PI / 4 + RM.az, e = 0.62, d = 30;
+    dt = dt || 0.016;
+    if (RM.zu == null) RM.zu = RM.camera.zoom;
+    if (RM.azC == null) { RM.azC = RM.az; RM.elC = RM.el; }
+    const st = stageInfo();
+    if (!st) RM.stManual = false;
+    RM.stK = (RM.stK || 0) + ((st ? 1 : 0) - (RM.stK || 0)) * Math.min(1, dt * 2.6);
+    if (!!st !== !!RM.stOn) { RM.stOn = !!st; stageBars(st); }
+    // 角度：說話時轉到側面（玩家自己轉過就不搶），結束後慢慢轉回玩家原本的角度
+    const wantAz = st && !RM.stManual ? st.a - Math.PI / 4 : RM.az;
+    RM.azC += angD(RM.azC, wantAz) * Math.min(1, dt * (st ? 2.2 : 3.5));
+    const wantEl = st ? Math.min(RM.el, 0.44) : RM.el;
+    RM.elC += (wantEl - RM.elC) * Math.min(1, dt * 3);
+    // 縮放：說話時推近（玩家自己放得更大就照玩家的），結束後退回玩家的縮放
+    const zt = st ? Math.max(RM.zu, st.zoom) : RM.zu;
+    if (Math.abs(zt - RM.camera.zoom) > 1e-3) { RM.camera.zoom += (zt - RM.camera.zoom) * Math.min(1, dt * 2.8); RM.camera.updateProjectionMatrix(); }
+    const a = Math.PI / 4 + RM.azC, e = RM.elC, d = 30;
     // 操控中：鏡頭跟著那個人（放大之後才看得清楚）
     const tg = RM.camT || (RM.camT = new T.Vector3());
     const p = RM.ctl && RM.ppl[RM.ctl.id], want = p && p.pos ? p.pos : null;
-    if (want) { const k = Math.max(0, (RM.camera.zoom - 1) / RM.camera.zoom); tg.lerp(new T.Vector3(want.x * k, 0, want.z * k), 0.08); }
-    else tg.lerp(new T.Vector3(), 0.2);
-    RM.camera.position.set(tg.x + Math.sin(a) * Math.cos(e) * d, Math.sin(e) * d + 0.7, tg.z + Math.cos(a) * Math.cos(e) * d);
-    RM.camera.lookAt(tg.x, 0.55, tg.z);
+    if (st) tg.lerp(new T.Vector3(st.c.x, 0, st.c.z), Math.min(1, dt * 3));
+    else if (want) { const k = Math.max(0, (RM.camera.zoom - 1) / RM.camera.zoom); tg.lerp(new T.Vector3(want.x * k, 0, want.z * k), 0.08); }
+    else { const k = Math.max(0, (RM.camera.zoom - 1) / RM.camera.zoom); tg.lerp(new T.Vector3(tg.x * k, 0, tg.z * k), 0.06); }
+    const ly = 0.55 + 0.3 * RM.stK;
+    RM.camera.position.set(tg.x + Math.sin(a) * Math.cos(e) * d, ly + Math.sin(e) * d, tg.z + Math.cos(a) * Math.cos(e) * d);
+    RM.camera.lookAt(tg.x, ly, tg.z);
+  }
+  // 擋在鏡頭和房間中間的牆：變透明（踢腳板留著，看得出房間的邊）；第一人稱時四面都是實心
+  function wallFade(dt) {
+    if (!RM.walls || !RM.walls.length) return;
+    const a = Math.PI / 4 + (RM.azC || 0), dx = Math.sin(a), dz = Math.cos(a);
+    for (const w of RM.walls) {
+      const dot = w.n[0] * dx + w.n[1] * dz, k = Math.max(0, Math.min(1, (dot - 0.12) / 0.38));
+      const want = RFP.on ? 1 : 1 - 0.92 * k;
+      w.op += (want - w.op) * Math.min(1, dt * 7);
+      if (Math.abs(w.op - want) < 0.004) w.op = want;
+      const tr = w.op < 0.995;
+      for (const m of w.meshes) {
+        const M = m.material;
+        if (M.transparent !== tr) { M.transparent = tr; M.needsUpdate = true; }
+        M.opacity = w.op; M.depthWrite = w.op > 0.5; m.castShadow = w.op > 0.5; m.userData.op = w.op;
+        m.renderOrder = tr ? 2 : 0;
+      }
+    }
   }
   function roomInit() {
     ensureMats();
@@ -3381,7 +3466,12 @@
     RM.plights = [0, 1, 2, 3, 4, 5, 6, 7].map(() => { const L = new T.PointLight(0xFFA050, 0, 4.2, 1.5); RM.scene.add(L); return L; });
     const el = RM.renderer.domElement;
     let start = null, moved = 0;
-    el.addEventListener("pointerdown", e => { start = { x: e.clientX, y: e.clientY, t: performance.now(), yaw: RFP.yaw, pitch: RFP.pitch }; moved = 0; el.setPointerCapture && el.setPointerCapture(e.pointerId); if (RM.edit) editDown(e); });
+    el.addEventListener("pointerdown", e => {
+      start = { x: e.clientX, y: e.clientY, t: performance.now(), yaw: RFP.yaw, pitch: RFP.pitch,
+        // 在可以上下捲動的頁面裡（觀察面板）只能左右轉；全螢幕的操控、布置畫面和滑鼠可以上下拖改俯角
+        tilt: e.pointerType === "mouse" || !!(RM.host && getComputedStyle(RM.host).touchAction === "none") };
+      moved = 0; el.setPointerCapture && el.setPointerCapture(e.pointerId); if (RM.edit) editDown(e);
+    });
     el.addEventListener("pointermove", e => {
       // 第一人稱：滑鼠鎖定時直接轉頭；手機（沒鎖定）用拖曳轉頭
       if (RFP.on && document.pointerLockElement === el) { RFP.yaw -= e.movementX * 0.0025; RFP.pitch = Math.max(-1.2, Math.min(1.1, RFP.pitch - e.movementY * 0.0025)); return; }
@@ -3390,9 +3480,13 @@
       if (!start) return;
       const dx = e.clientX - start.x; moved = Math.max(moved, Math.abs(dx) + Math.abs(e.clientY - start.y));
       if (RM.edit && RM.edit.drag) { editMove(e); return; }
-      if (moved > 6) { RM.az = Math.max(-0.55, Math.min(0.55, RM.az0 + dx * 0.006)); }
+      if (moved > 6) {
+        // 360° 轉：從鏡頭現在的角度接著轉（說話特寫中也可以自己轉，之後就不再自動轉）
+        if (!RM.drag) { RM.drag = true; if (RM.stOn) RM.stManual = true; RM.az0 = RM.azC != null ? RM.azC : RM.az; RM.el0 = RM.el; }
+        RM.az = RM.az0 - dx * 0.008; RM.azC = RM.az;
+        if (start.tilt) { RM.el = Math.max(0.22, Math.min(1.25, RM.el0 + (e.clientY - start.y) * 0.004)); RM.elC = RM.el; }
+      }
     });
-    el.addEventListener("pointerdown", () => { RM.az0 = RM.az; });
     el.addEventListener("pointerup", e => {
       if (RM.edit) { editUp(e, moved); start = null; return; }
       if (RFP.on) {
@@ -3405,16 +3499,17 @@
       if (start && moved < 8 && performance.now() - start.t < 450) roomTap(e.clientX, e.clientY);
       start = null;
     });
-    el.addEventListener("pointercancel", () => { start = null; });
+    el.addEventListener("pointercancel", () => { start = null; RM.drag = false; });
+    el.addEventListener("pointerup", () => { RM.drag = false; });
     // 縮放：滾輪或雙指
-    el.addEventListener("wheel", e => { e.preventDefault(); if (RFP.on) return; RM.camera.zoom = Math.max(0.8, Math.min(3.2, RM.camera.zoom * (1 - e.deltaY * 0.0015))); RM.camera.updateProjectionMatrix(); }, { passive: false });
+    el.addEventListener("wheel", e => { e.preventDefault(); if (RFP.on) return; setRoomZoom(Math.max(0.8, Math.min(3.2, (RM.zu || RM.camera.zoom) * (1 - e.deltaY * 0.0015)))); }, { passive: false });
     const touches = new Map(); let pd = 0;
     el.addEventListener("touchstart", e => { if (e.touches.length === 2) { pd = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); start = null; } }, { passive: true });
     el.addEventListener("touchmove", e => {
       if (e.touches.length !== 2 || !pd) return;
       e.preventDefault();
       const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      RM.camera.zoom = Math.max(0.8, Math.min(3.2, RM.camera.zoom * d / pd)); pd = d; RM.camera.updateProjectionMatrix();
+      setRoomZoom(Math.max(0.8, Math.min(3.2, (RM.zu || RM.camera.zoom) * d / pd))); pd = d;
     }, { passive: false });
     el.addEventListener("touchend", e => { if (e.touches.length < 2) pd = 0; }, { passive: true });
   }
@@ -3462,7 +3557,8 @@
       for (const o of [p.st, p.zz, p.name]) { if (!o.userData.s0) o.userData.s0 = o.scale.clone(); const k = RFP.on ? (o === p.name ? 0.55 : 0.45) : 1; o.scale.set(o.userData.s0.x * k, o.userData.s0.y * k, 1); }
       if (p.zz.visible) p.zz.position.y += Math.sin(tt * 1.5 + p.phase) * 0.0015;
     }
-    placeRoomCam();
+    placeRoomCam(dt);
+    wallFade(dt);
     if (RM.edit) editFrame(tt);
     const camR = RFP.on && RFP.cam ? RFP.cam : RM.camera;
     if (RFP.on && RFP.busy && document.pointerLockElement === RM.renderer.domElement && RFP.busy()) document.exitPointerLock();
@@ -3476,12 +3572,12 @@
     study: ["📖", "讀書寫字", "坐下來讀書、寫東西"], work: ["🔧", "動手做事", "在工作台忙著做東西"], cook: ["🍳", "下廚", "在爐台前做吃的"], drum: ["🥁", "打鼓", "打了一段鼓"] };
   function ctlPerson() { return RM.ctl && RM.ppl[RM.ctl.id]; }
   function ctlSet(id, hooks) {
-    if (!id) { if (RFP.on || RFP.want) roomFPSet(false); if (RM.ctl) { const p = RM.ppl[RM.ctl.id]; if (p) { p.manual = 0; p.ctlInit = false; } RM.camera.zoom = 1; RM.camera.updateProjectionMatrix(); } RM.ctl = null; return; }
+    if (!id) { if (RFP.on || RFP.want) roomFPSet(false); if (RM.ctl) { const p = RM.ppl[RM.ctl.id]; if (p) { p.manual = 0; p.ctlInit = false; } setRoomZoom(1); } RM.ctl = null; return; }
     // 剛開始操控（或剛走進這個房間）：從他原本該在的位置重新站起來
     if (!RM.ctl || RM.ctl.id !== id) { const old = RM.ppl[id]; if (old) { RM.scene.remove(old.g); delete RM.ppl[id]; } }
     RM.ctl = { id, hooks: hooks || {}, spot: null, vx: 0, vz: 0 };
     const host = RM.host, portrait = host && host.clientHeight > host.clientWidth;
-    RM.camera.zoom = portrait ? 1.9 : 1.3; RM.camera.updateProjectionMatrix();
+    setRoomZoom(portrait ? 1.9 : 1.3);
     if (RM.lastState) roomUpdate(RM.lastState);
   }
   function roomPick(cx, cy) {
@@ -3496,7 +3592,7 @@
     const hp = rc.intersectObjects(list, false);
     if (hp.length) return H.onPerson && H.onPerson(hp[0].object.userData.char, cx, cy);
     // 家具：打到房間的方塊，看附近有沒有可以用的位置
-    const hm = rc.intersectObjects(RM.group.children, true).filter(h => h.object.isInstancedMesh || h.object.isMesh);
+    const hm = rc.intersectObjects(RM.group.children, true).filter(h => (h.object.isInstancedMesh || h.object.isMesh) && !(h.object.userData.wall && h.object.userData.op < 0.5));
     let pt = hm.length ? hm[0].point : null;
     if (!pt) { const pl = new T.Plane(new T.Vector3(0, 1, 0), 0), q = new T.Vector3(); if (rc.ray.intersectPlane(pl, q)) pt = q; }
     if (!pt) return;
@@ -3535,7 +3631,7 @@
     if (m < 0.15) { if (p.manual) { p.manual = 0; p.dest = p.pos.clone(); } return; }
     if (c.spot || p.path.length) { c.spot = null; p.path = []; p.destPose = "stand"; p.destY = 0; p.destYaw = null; }
     // 畫面方向換成房間座標（鏡頭從右前方 45° 看過來；第一人稱照視線方向）
-    const a = RFP.on ? RFP.yaw : Math.PI / 4 + RM.az, rx = Math.cos(a), rz = -Math.sin(a), fx = -Math.sin(a), fz = -Math.cos(a);
+    const a = RFP.on ? RFP.yaw : Math.PI / 4 + (RM.azC != null ? RM.azC : RM.az), rx = Math.cos(a), rz = -Math.sin(a), fx = -Math.sin(a), fz = -Math.cos(a);
     let dx = (c.vx * rx - c.vz * fx), dz = (c.vx * rz - c.vz * fz);
     const L = Math.hypot(dx, dz) || 1, sp = (RFP.on ? 1.3 : 1.7) * Math.min(1, m) * dt;
     dx = dx / L * sp; dz = dz / L * sp;
@@ -3564,10 +3660,10 @@
     return loadThree().then(three => {
       T = three;
       if (!RM.renderer) roomInit();
-      if (RM.host !== el) RM.autoFloor = true;
+      if (RM.host !== el) { RM.autoFloor = true; RM.stOn = false; }
       RM.host = el;
       el.insertBefore(RM.renderer.domElement, el.firstChild);
-      if (RM.loc !== locId) { RM.loc = locId; RM.az = 0; RM.floor = 0; RM.autoFloor = true; RM.camera.zoom = 1; RM.camera.updateProjectionMatrix(); buildRoom(locId); } else fitRoomCam();
+      if (RM.loc !== locId) { RM.loc = locId; RM.az = 0; RM.azC = 0; RM.el = RM.elC = 0.62; RM.floor = 0; RM.autoFloor = true; RM.stOn = false; RM.stK = 0; setRoomZoom(1); buildRoom(locId); } else fitRoomCam();
       floorUI();
       if (!RM.running) { RM.running = true; RM.last = 0; RM.raf = requestAnimationFrame(roomFrame); }
     });
@@ -3683,6 +3779,18 @@
     if (RM.host && !RM.host.querySelector(".room-edit-btn")) {
       const eb = document.createElement("button"); eb.type = "button"; eb.className = "room-edit-btn"; eb.textContent = "✏️ 布置"; eb.title = "編輯房間";
       eb.addEventListener("click", e => { e.stopPropagation(); editOpen(); }); RM.host.appendChild(eb);
+    }
+    if (RM.host && !RM.host.querySelector(".room-rot")) {
+      // 轉房間：每按一下轉 90°（也可以直接在畫面上左右拖）
+      const rb = document.createElement("div"); rb.className = "room-rot";
+      rb.innerHTML = `<button type="button" data-rrot="-1" aria-label="往左轉" title="往左轉">⟲</button><button type="button" data-rrot="1" aria-label="往右轉" title="往右轉">⟳</button>`;
+      rb.addEventListener("click", e => {
+        const b = e.target.closest("[data-rrot]"); if (!b) return; e.stopPropagation();
+        if (RM.stOn) RM.stManual = true;
+        const cur = RM.azC != null ? RM.azC : RM.az;
+        RM.az = cur + (+b.dataset.rrot) * Math.PI / 2;
+      });
+      RM.host.appendChild(rb);
     }
     const fl = floorsOf(RM.loc); if (!RM.host || fl.length < 2) return;
     const box = document.createElement("div"); box.className = "room-floors";
@@ -3842,7 +3950,7 @@
     document.body.appendChild(box); document.body.classList.add("room-editing");
     const stage = box.querySelector(".red-stage");
     RM.edit = { sel: -1, hist: [], tab: "", box, home, drag: null, hover: -1 }; RM.autoFloor = false;
-    RM.host = stage; stage.appendChild(RM.renderer.domElement); RM.camera.zoom = 1.15; RM.camera.updateProjectionMatrix(); fitRoomCam();
+    RM.host = stage; stage.appendChild(RM.renderer.domElement); setRoomZoom(1.15); fitRoomCam();
     box.addEventListener("click", e => {
       const t = e.target.closest("[data-tab]"); if (t) { RM.edit.tab = RM.edit.tab === t.dataset.tab ? "" : t.dataset.tab; return editPanel(); }
       const b = e.target.closest("[data-ed]"); if (!b) return;
@@ -3877,11 +3985,15 @@
     if (E.mark) { RM.scene.remove(E.mark); RM.scene.remove(E.hmark); }
     RM.edit = null; RM.host = E.home; E.home.insertBefore(RM.renderer.domElement, E.home.firstChild);
     E.box.remove(); document.body.classList.remove("room-editing");
-    RM.renderer.domElement.style.cursor = ""; RM.camera.zoom = 1; RM.camera.updateProjectionMatrix();
+    RM.renderer.domElement.style.cursor = ""; setRoomZoom(1);
     fitRoomCam(); floorUI(); if (RM.lastState) roomUpdate(RM.lastState);
   }
   function roomHas(locId) { return !!(N.interiors && N.interiors[locId]); }
-  N.room3d = { supported, has: roomHas, mount: roomMount, update: roomUpdate, stop: roomStop, edit: editOpen, exportEdits, importEdits,
+  // 說話特寫：現在是誰在說話（鏡頭稍微偏向他）、這段的標題（顯示在下方黑邊）
+  function roomCue(speaker, title) { RM.speaker = speaker || null; if (title !== undefined) RM.stageTitle = title || ""; if (RM.stOn) stageBars(true); }
+  function roomView() { return { az: RM.azC, el: RM.elC, zoom: RM.camera && RM.camera.zoom, stage: !!RM.stOn, walls: (RM.walls || []).map(w => [w.side, +w.op.toFixed(2)]) }; }
+  N.room3d = { supported, has: roomHas, mount: roomMount, update: roomUpdate, stop: roomStop, edit: editOpen, exportEdits, importEdits, cue: roomCue, view: roomView,
+    rotate: (da, el) => { RM.az = (RM.azC != null ? RM.azC : RM.az) + (da || 0); if (el != null) RM.el = el; },
     _dbg: () => ({ RFP, RM }),
     fp: on => roomFPSet(on === undefined ? !(RFP.on || RFP.want) : on), isFP: () => RFP.on, aim: () => roomFPAim(), interact: () => roomFPInteract(), setBusy: fn => { RFP.busy = fn; },
     emote: roomEmote, control: ctlSet, ctlGo: (x, z) => ctlGo(new T.Vector3(x, 0, z)), ctlUseSpot, ctlMove, ctlScreen, ctlApproach, floors: () => floorsOf(RM.loc).length, setFloor: i => { if (RM.floor !== i) { RM.floor = i; buildRoom(RM.loc); floorUI(); const p = ctlPerson(); if (p) { p.ctlInit = false; if (RM.ctl) RM.ctl.spot = null; } if (RM.lastState) roomUpdate(RM.lastState); } }, curFloor: () => RM.floor };

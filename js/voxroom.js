@@ -626,6 +626,45 @@
     if (th.window !== false) windows(G, th, x0, z0, nx, nz, cw, cd);
   }
 
+  /* ── 右牆、前牆（前牆中間一扇門）──
+   * 回傳 sideOf(x, y, z)：牆上的方塊屬於哪一面（L 左、B 後、R 右、F 前），踢腳板以下和地板是 null（永遠不透明） */
+  function outerWalls(G, W, D, th) {
+    const nx = Math.round(W / V), nz = Math.round(D / V), x0 = -Math.round(W / 2 / V), z0 = -Math.round(D / 2 / V), x1 = x0 + nx, z1 = z0 + nz;
+    const H = th.ceil ? Math.round(th.ceil / V) : 26;
+    const cw = th.cut ? Math.round(th.cut[0] / V) : 0, cd = th.cut ? Math.round(th.cut[1] / V) : 0;
+    const wall = th.wall, wall2 = th.wall2 || mix(th.wall, 0x000000, 0.06), wain = th.wain || 0x82593A, trim = th.trim || 0x5A3B26, cap = th.cap || mix(th.wall, 0xFFFFFF, 0.25);
+    const wy = th.wainH != null ? th.wainH : 8, wp = th.wallPat, wc3 = th.wall3 || mix(wall, 0xFFFFFF, 0.3);
+    const wc = (u, y, base) => y < wy ? ((u % 6 === 0) ? mix(wain, 0x000000, 0.1) : wain) : y === wy ? trim : y >= H - 1 ? cap : wallPat(wp, u, y, base, wc3);
+    const put = (x, y, z, c) => { if (!G.has(x, y, z)) G.set(x, y, z, c, 0); };
+    const zr0 = cw ? z0 + cd - 2 : z0 - 2;
+    // 右牆
+    for (let x = x1; x < x1 + 2; x++) for (let z = zr0; z < z1 + 2; z++) {
+      for (let y = -2; y < 0; y++) put(x, y, z, y === -1 ? 0x6E4A30 : 0x5E3E28);
+      for (let y = 0; y < H; y++) put(x, y, z, wc(z - z0, y, wall2));
+    }
+    // 前牆：門寬 1 公尺、高 2.1 公尺，門框、門板、門把
+    const dx0 = -5, dx1 = 4, dh = 21;
+    for (let z = z1; z < z1 + 2; z++) for (let x = x0 - 2; x < x1; x++) {
+      for (let y = -2; y < 0; y++) put(x, y, z, y === -1 ? 0x6E4A30 : 0x5E3E28);
+      for (let y = 0; y < H; y++) {
+        const inDoor = x >= dx0 && x <= dx1 && y < dh, frame = (x === dx0 - 1 || x === dx1 + 1) && y <= dh || (x >= dx0 - 1 && x <= dx1 + 1 && y === dh);
+        if (inDoor) { if (z === z1 + 1) put(x, y, z, (x === dx0 || x === dx1 || y === 0 || y === dh - 1) ? 0x5A3C26 : 0x6A4A30); continue; }
+        put(x, y, z, frame ? trim : wc(x - x0, y, wall));
+      }
+    }
+    put(dx1 - 1, 10, z1, 0xD8A840);
+    const base = 2;
+    return (x, y, z) => {
+      if (y < base) return null;
+      if (x < x0) return "L";
+      if (z < z0) return "B";
+      if (x >= x1) return "R";
+      if (z >= z1) return "F";
+      if (cw && z < z0 + cd && x >= x1 - cw - 1) return z >= z0 + cd - 2 && x > x1 - cw ? "B" : "R";
+      return null;
+    };
+  }
+
   /* ── 天花板主燈 ──
    * dome 碗型吊燈、chandelier 燭台吊燈、flush 吸頂燈、lantern 紙燈籠、bulbs 燈泡串、industrial 工業風燈罩
    * 燈光是柔和的點光（不投影子），所以不會有從上往下打的硬陰影 */
@@ -758,11 +797,13 @@
 
   /* ── 組成網格 ── */
   function toMeshes(T, G, opt) {
-    const solid = [], glow = [], win = [];
+    const solid0 = [], glow0 = [], win0 = [], sideOf = opt && opt.side, sides = {};
     for (const v of G.m.values()) {
       if (v.c == null) continue;
       const { x, y, z } = v;
       if (G.has(x + 1, y, z) && G.has(x - 1, y, z) && G.has(x, y + 1, z) && G.has(x, y - 1, z) && G.has(x, y, z + 1) && G.has(x, y, z - 1)) continue;
+      const sd = sideOf && sideOf(x, y, z), S = sd ? (sides[sd] || (sides[sd] = { solid: [], glow: [], win: [] })) : null;
+      const solid = S ? S.solid : solid0, glow = S ? S.glow : glow0, win = S ? S.win : win0;
       let col = new T.Color(v.c);
       if (v.f & F_GLOW) { glow.push([x, y, z, col]); continue; }
       if (v.f & F_WIN) { win.push([x, y, z, col]); continue; }
@@ -781,11 +822,20 @@
       im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
       im.castShadow = shadow; im.receiveShadow = shadow; im.userData.noVox = true; return im;
     };
-    out.solid = mk(solid, new T.MeshLambertMaterial({ color: 0xFFFFFF }), true);
-    out.glow = mk(glow, new T.MeshBasicMaterial({ color: 0xFFFFFF }), false);
+    out.solid = mk(solid0, new T.MeshLambertMaterial({ color: 0xFFFFFF }), true);
+    out.glow = mk(glow0, new T.MeshBasicMaterial({ color: 0xFFFFFF }), false);
     out.winMat = new T.MeshBasicMaterial({ color: 0xFFFFFF });
-    out.win = mk(win, out.winMat, false);
-    out.count = solid.length + glow.length + win.length;
+    out.win = mk(win0, out.winMat, false);
+    out.count = solid0.length + glow0.length + win0.length;
+    // 每一面牆自己一組網格、自己的材質（才能各自變透明）
+    out.walls = {};
+    for (const k in sides) {
+      const S = sides[k], winMat = new T.MeshBasicMaterial({ color: 0xFFFFFF });
+      const ms = [mk(S.solid, new T.MeshLambertMaterial({ color: 0xFFFFFF }), true), mk(S.glow, new T.MeshBasicMaterial({ color: 0xFFFFFF }), false), mk(S.win, winMat, false)].filter(Boolean);
+      ms.forEach(m => { m.userData.wall = k; });
+      out.walls[k] = { meshes: ms, winMat };
+      out.count += S.solid.length + S.glow.length + S.win.length;
+    }
     return out;
   }
 
@@ -862,8 +912,11 @@
       if (!theme.outdoor) companions(ctx, placed[placed.length - 1], putItem, theme);
     });
     const out = [].concat(...res);
-    const ms = opt2 && opt2.noMesh ? {} : toMeshes(T, G);
-    return { meshes: ms, grid: G, lights, occ: occupancy(G, W, D), spec: out, clash: ctx.clash, topAt: (x, z, maxY) => topAt(G, x, z, maxY) };
+    const occ = occupancy(G, W, D);
+    // 娃娃屋：家具擺好之後才補右牆、前牆（不影響擺放和走路的格子），四面牆分開成網格，擋到鏡頭的那面可以變透明
+    const sideOf = theme.outdoor ? null : outerWalls(G, W, D, theme);
+    const ms = opt2 && opt2.noMesh ? {} : toMeshes(T, G, { side: sideOf });
+    return { meshes: ms, grid: G, lights, occ, spec: out, clash: ctx.clash, topAt: (x, z, maxY) => topAt(G, x, z, maxY) };
   }
 
 

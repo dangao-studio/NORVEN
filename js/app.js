@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.26.2";
+  const VERSION = "3.27.0";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -827,7 +827,7 @@
         ${profileOpen ? `<div class="profile"><p><b>個性</b>　${esc(x.traits)}</p><p><b>關係</b>　${esc(x.relations)}</p></div>` : ""}
         <button type="button" class="link-btn" id="stopBtn">停止觀察</button>
       </div>
-      <div class="card plan-card">
+      <div class="card plan-card${busy && !(enc && enc.done) ? " on-stage" : ""}">
         <div class="plan-title"><span>📐 ${esc(locName(planLoc))}・平面圖</span><span class="muted">${planLegend(planLoc)}</span></div>
         ${planHTML(planLoc)}
       </div>
@@ -1134,7 +1134,12 @@
     if (!el) return;
     const c0 = clockNow(), where = currentWhere(c0), s = slot();
     const talking = new Set(s.encounter && !s.encounter.done && !s.encounter.pending ? s.encounter.cast : []);
-    const push = () => N.room3d.update({ where, min: c0.min, observing: s.observing, hints: hintSet(c0, where), talking });
+    const push = () => {
+      // 說話特寫：告訴房間現在誰在說話、這段叫什麼
+      const enc = s.encounter, ev = enc && talking.size && encEvent(enc), ln = ev && ev.lines[enc.step];
+      if (N.room3d.cue) N.room3d.cue(ln && ln[0] !== "＊" ? ln[0] : null, ev ? `〈${ev.title}〉` : "");
+      N.room3d.update({ where, min: c0.min, observing: s.observing, hints: hintSet(c0, where), talking });
+    };
     if (roomHost !== el || !el.querySelector(".room-canvas")) {
       roomHost = el;
       const isCtl = !!(ctl && el.closest("#ctl"));
@@ -2583,6 +2588,7 @@
   function lineEmote(enc) {
     const ev = enc && encEvent(enc), ln = ev && ev.lines && ev.lines[enc.step]; if (!ln) return;
     const [who, text] = ln, cast = enc.cast || [];
+    if (N.room3d && N.room3d.cue) N.room3d.cue(who !== "＊" ? who : null, `〈${ev.title}〉`);
     if (who !== "＊" && cast.indexOf(who) >= 0) { const m = EMO_SAY.find(([re]) => re.test(text)); if (m) emoteTo(who, m[1]); return; }
     const named = cast.filter(id => text.indexOf(id) >= 0).sort((a, b) => text.indexOf(a) - text.indexOf(b));
     for (const [re, name, whom] of EMO_NARR) {
