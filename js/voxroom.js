@@ -14,7 +14,7 @@
   Grid.prototype.set = function (x, y, z, c, f) { this.m.set(K(x, y, z), { x, y, z, c, f: f || 0 }); };
   Grid.prototype.has = function (x, y, z) { return this.m.has(K(x, y, z)); };
   Grid.prototype.get = function (x, y, z) { return this.m.get(K(x, y, z)); };
-  const F_GLOW = 1, F_WIN = 2, F_NOAO = 4;
+  const F_GLOW = 1, F_WIN = 2, F_NOAO = 4, F_WATER = 8, F_DECK = 16;   // 水面（不能走）、棧橋／木棧道（可以走上去）
 
   // 用公尺描述一個方塊範圍（x、z 為中心，y 為底），轉成格子
   function fill(G, x0, y0, z0, x1, y1, z1, c, f, pat) {
@@ -40,9 +40,9 @@
       fill(G, wx - sw / 2, y, wz - sd / 2, wx + sw / 2, y + h, wz + sd / 2, c, f, P);
     };
     B.light = (x, y, z, color, power) => { const [cx, cz] = tr(x, z); lights.push({ x: ox + cx, y, z: oz + cz, color, power: power || 1 }); };
-    B.paint = (w, d, c, x, z, pat) => {   // 畫在地板那一層（地毯、法陣）
+    B.paint = (w, d, c, x, z, pat, f) => {   // 畫在地板那一層（地毯、法陣、水面）
       const [cx, cz] = tr(x || 0, z || 0), sw = q % 2 ? d : w, sd = q % 2 ? w : d;
-      fill(G, ox + cx - sw / 2, -V, oz + cz - sd / 2, ox + cx + sw / 2, 0, oz + cz + sd / 2, c, F_NOAO, pat);
+      fill(G, ox + cx - sw / 2, -V, oz + cz - sd / 2, ox + cx + sw / 2, 0, oz + cz + sd / 2, c, F_NOAO | (f || 0), pat);
     };
     return B;
   }
@@ -535,12 +535,12 @@
       case "fountain":
         B(1.6, 0.3, 1.6, 0xB8B0A0, 0, 0, 0, 0, (i, j, k, ni, nj, nk) => (i > 0 && i < ni - 1 && k > 0 && k < nk - 1) ? (j === 2 ? 0x5AA8C8 : null) : 0xB8B0A0);
         B(0.3, 0.8, 0.3, 0xC8C0B0, 0, 0.3, 0); B(0.6, 0.1, 0.6, 0xC8C0B0, 0, 1.0, 0); B(0.2, 0.3, 0.2, 0x8AD8F0, 0, 1.1, 0, F_GLOW); break;
-      case "water": B.paint(o.w || 2, o.d || 1.5, 0x3E7A9A, 0, 0, (i, j, k) => hashI(i, k, 3) < 0.12 ? 0x5AA8C8 : 0x3E7A9A); break;
+      case "water": B.paint(o.w || 2, o.d || 1.5, 0x3E7A9A, 0, 0, (i, j, k) => hashI(i, k, 3) < 0.12 ? 0x5AA8C8 : 0x3E7A9A, F_WATER); break;
       case "path": B.paint(o.w || 1, o.d || 3, o.c || 0xB8A888, 0, 0, (i, j, k) => (i + (k % 2)) % 3 === 0 ? mix(o.c || 0xB8A888, 0x000000, 0.12) : (o.c || 0xB8A888)); break;
       case "rocks":
         B(0.6, 0.4, 0.5, 0x6A6870, 0, 0, 0); B(0.4, 0.3, 0.3, 0x7A7880, 0.1, 0.4, 0); B(0.4, 0.3, 0.4, 0x5A5860, 0.5, 0, 0.2); break;
       case "dock":
-      { const dl = o.l || 1.6; B(0.8, 0.2, dl, 0x8A6A4A, 0, 0.1, 0, 0, (i, j, k) => k % 2 ? 0x8A6A4A : 0x7A5A3A); for (let z = -dl / 2 + 0.1; z <= dl / 2 - 0.1 + 1e-6; z += Math.max(0.6, (dl - 0.2) / Math.max(1, Math.round((dl - 0.2) / 0.8)))) for (const x of [-0.35, 0.35]) B(0.1, 0.3, 0.1, 0x5A4632, x, 0, z); } break;
+      { const dl = o.l || 1.6; B(0.8, 0.2, dl, 0x8A6A4A, 0, 0.1, 0, F_DECK, (i, j, k) => k % 2 ? 0x8A6A4A : 0x7A5A3A); for (let z = -dl / 2 + 0.1; z <= dl / 2 - 0.1 + 1e-6; z += Math.max(0.6, (dl - 0.2) / Math.max(1, Math.round((dl - 0.2) / 0.8)))) for (const x of [-0.35, 0.35]) B(0.1, 0.3, 0.1, 0x5A4632, x, 0, z, F_DECK); } break;
       case "stall": {   // 夜市攤位
         const cc = c || 0xD8402A;
         B(1.2, 0.8, 0.6, 0x8A6A4A, 0, 0, 0); B(1.3, 0.1, 0.7, 0xD8CBB8, 0, 0.8, 0);
@@ -1272,15 +1272,26 @@
     return null;
   }
   // 走路用的格子：每格 0.2 公尺，0.2～1.4 公尺高之間有東西就算擋路（地毯、地板不算）
+  // 水面不能走；棧橋、木棧道可以走上去（lift 記站在上面的高度）
   function occupancy(G, W, D) {
-    const C = 0.2, nx = Math.ceil(W / C), nz = Math.ceil(D / C), x0 = -W / 2, z0 = -D / 2, data = new Uint8Array(nx * nz);
+    const C = 0.2, nx = Math.ceil(W / C), nz = Math.ceil(D / C), x0 = -W / 2, z0 = -D / 2, data = new Uint8Array(nx * nz), lift = new Float32Array(nx * nz), deck = new Uint8Array(nx * nz);
+    const cellOf = v => { const cx = Math.floor((v.x * V + V / 2 - x0) / C), cz = Math.floor((v.z * V + V / 2 - z0) / C); return cx >= 0 && cz >= 0 && cx < nx && cz < nz ? cz * nx + cx : -1; };
     for (const v of G.m.values()) {
-      if (v.y < 2 || v.y > 14 || (v.f & F_NOAO)) continue;
-      const cx = Math.floor((v.x * V + V / 2 - x0) / C), cz = Math.floor((v.z * V + V / 2 - z0) / C);
-      if (cx >= 0 && cz >= 0 && cx < nx && cz < nz) data[cz * nx + cx] = 1;
+      if (!(v.f & F_DECK)) continue;
+      const k = cellOf(v); if (k < 0) continue;
+      deck[k]++; lift[k] = Math.max(lift[k], (v.y + 1) * V);
     }
-    for (let cz = 0; cz < nz; cz++) for (let cx = 0; cx < nx; cx++) { const vx = Math.floor((x0 + (cx + 0.5) * C) / V), vz = Math.floor((z0 + (cz + 0.5) * C) / V); if (!G.has(vx, -1, vz)) data[cz * nx + cx] = 1; }
-    return { C, nx, nz, x0, z0, data };
+    for (const v of G.m.values()) {
+      if (v.y < 2 || v.y > 14 || (v.f & (F_NOAO | F_DECK))) continue;
+      const k = cellOf(v); if (k >= 0) data[k] = 1;
+    }
+    for (let cz = 0; cz < nz; cz++) for (let cx = 0; cx < nx; cx++) {
+      const k = cz * nx + cx, vx = Math.floor((x0 + (cx + 0.5) * C) / V), vz = Math.floor((z0 + (cz + 0.5) * C) / V), fl = G.get(vx, -1, vz);
+      if (deck[k] >= 4) continue;   // 大半格是橋面才算站得上去（只擦到邊的不算）
+      lift[k] = 0;
+      if (!fl || (fl.f & F_WATER)) data[k] = 1;
+    }
+    return { C, nx, nz, x0, z0, data, lift };
   }
-  N.voxRoom = { build, V, _k: { Grid, vfurn, placer, toMeshes, mix, hashI, F_GLOW, F_WIN, F_NOAO } };
+  N.voxRoom = { build, V, _k: { Grid, vfurn, placer, toMeshes, mix, hashI, F_GLOW, F_WIN, F_NOAO, F_WATER, F_DECK } };
 })();

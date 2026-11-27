@@ -1474,10 +1474,13 @@
       const s = emojiSprite("💬", 1.3); s.visible = false; s.userData.loc = l.id; s.renderOrder = 6;
       root.add(s); hintMarks[l.id] = s;
     }
+    GM.dyn0 = root.children.length;   // 之後加的（貓、鴿子……）會走動，不算擋路的擺設
     buildLife();
+    GM.dyn1 = root.children.length;
     root.children.slice(nStatic).forEach(o => o.traverse(m => { m.castShadow = false; }));
     clouds.forEach(c => c.traverse(m => { m.castShadow = false; }));
     blockify(root);
+    buildGroundMap();
     bindInput(renderer.domElement);
     built = true;
     await breathe(onP, 1, "好了！");
@@ -2355,12 +2358,111 @@
     const head = new T.Mesh(new T.BoxGeometry(0.06, 0.25, 0.5), new T.MeshBasicMaterial({ color: 0xFFF6D0 })); head.position.set(CAR / 2 + 0.03, 0.8, 0); tr.add(head);
     COAST.train = { g: tr, xs: xs + 3 + CAR / 2, xe: xe + 8, z, y: Y + 0.22, wm };
   }
-  // 走在橋上、島上的高度（其他地方都是 0）
+  // 走在橋上、島上、人行道、廣場上的高度
   function groundAt(x, z) {
     const Bd = COAST.bridge;
     if (Bd) { const s = (x - Bd.xa) * Bd.ux + (z - Bd.za) * Bd.uz, o = Math.abs(-(x - Bd.xa) * Bd.uz + (z - Bd.za) * Bd.ux); if (s > -0.3 && s < Bd.L + 0.3 && o < Bd.W / 2 + 0.2) return Bd.deck(Math.max(0, Math.min(Bd.L, s))) + 0.08; }
     const I = COAST.isle; if (I) { const rr = I.rrAt(x - I.x, z - I.z); if (rr < 1) return I.topAt(rr); }
-    return 0;
+    return GM.floor ? gmFloor(x, z) : 0;
+  }
+  /* ═════════ 地面高度圖 ═════════
+   * 蓋好小鎮之後，從上往下拍一張「深度照」（每格 0.1 單位）：
+   *   地面、人行道、廣場的高度 → 人走路時腳踩的高度（不會再陷進墊高的人行道裡）；
+   *   比腳踝高很多的東西（路燈、長椅、樹、郵筒、消防栓、花箱、停著的車……）→ 走路格子擋起來，居民會繞過去。
+   * 不管哪種畫質（手機簡化版、輕量城市、高畫質）都是照實際蓋出來的模型算，不用每種擺設各自登記。 */
+  const GM = { P: 0.1, TOP: 0.7, FAR: 0.95, OB: 0.42, raw: null, floor: null };
+  const gmIdx = (x, z) => { const i = Math.floor((x - GM.x0) / GM.P), j = Math.floor((z - GM.z0) / GM.P); return i < 0 || j < 0 || i >= GM.W || j >= GM.H ? -1 : j * GM.W + i; };
+  const gmH = v => v / 100 - 0.2;
+  function gmFloor(x, z) { const k = gmIdx(x, z); return k < 0 ? 0 : Math.max(0, gmH(GM.floor[k])); }
+  function buildGroundMap() {
+    try {
+      const t0 = performance.now();
+      const xs = GRID.cells.map(c => c.x), zs = GRID.cells.map(c => c.z);
+      GM.x0 = Math.min(...xs) - 6; GM.z0 = Math.min(...zs) - 6;
+      GM.W = Math.ceil((Math.max(...xs) + GRID.BW + 6 - GM.x0) / GM.P); GM.H = Math.ceil((Math.max(...zs) + GRID.BD + 6 - GM.z0) / GM.P);
+      const TILE = 1024, raw = new Uint8Array(GM.W * GM.H).fill(20), buf = new Uint8Array(TILE * TILE * 4);
+      const hidden = [], noCull = [], dyn = new Set(root.children.slice(GM.dyn0 || 0, GM.dyn1 || 0));
+      if (COAST.train) dyn.add(COAST.train.g);
+      dyn.forEach(o => { if (o.visible) { hidden.push(o); o.visible = false; } });
+      scene.traverse(o => { if (!o.visible) return; const m = o.material, tr = m && !Array.isArray(m) && m.transparent && m.opacity < 0.7;
+        if (o.isSprite || o.isPoints || o.isLine || tr) { hidden.push(o); o.visible = false; }
+        else if (o.isInstancedMesh && o.frustumCulled) { noCull.push(o); o.frustumCulled = false; } });   // 一堆複製的小東西：外框只算第一個，拍分塊照時會被誤剪掉
+      for (const id in walkers) { const g = walkers[id].g; if (g.visible) { hidden.push(g); g.visible = false; } }
+      const rt = new T.WebGLRenderTarget(TILE, TILE), dm = new T.MeshDepthMaterial({ depthPacking: T.RGBADepthPacking }); dm.side = T.DoubleSide;
+      const cam0 = new T.OrthographicCamera(0, 1, 0, -1, 0, GM.FAR); cam0.up.set(0, 0, -1);
+      const fog = scene.fog, bg = scene.background, cc = new T.Color(), ca = renderer.getClearAlpha(), au = renderer.shadowMap.autoUpdate;
+      renderer.getClearColor(cc); scene.fog = null; scene.background = null; scene.overrideMaterial = dm; renderer.shadowMap.autoUpdate = false; renderer.setClearColor(0xFFFFFF, 1);
+      const UD = 255 / 256, UF = [UD / 16777216 / 255, UD / 65536 / 255, UD / 256 / 255, UD / 255];
+      for (let ty = 0; ty < GM.H; ty += TILE) for (let tx = 0; tx < GM.W; tx += TILE) {
+        const ax = GM.x0 + tx * GM.P, az = GM.z0 + ty * GM.P, L = TILE * GM.P;
+        cam0.right = L; cam0.bottom = -L; cam0.position.set(ax, GM.TOP, az); cam0.lookAt(ax, GM.TOP - 1, az); cam0.updateProjectionMatrix();
+        renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, cam0);
+        renderer.readRenderTargetPixels(rt, 0, 0, TILE, TILE, buf);
+        for (let py = 0; py < TILE; py++) { const gz = ty + TILE - 1 - py; if (gz >= GM.H) continue;
+          for (let px = 0; px < TILE; px++) { const gx = tx + px; if (gx >= GM.W) break;
+            const i = (py * TILE + px) * 4; if (buf[i] === 255 && buf[i + 1] === 255 && buf[i + 2] === 255 && buf[i + 3] === 255) continue;
+            const h = GM.TOP - (buf[i] * UF[0] + buf[i + 1] * UF[1] + buf[i + 2] * UF[2] + buf[i + 3] * UF[3]) * GM.FAR;
+            raw[gz * GM.W + gx] = Math.max(0, Math.min(255, Math.round((h + 0.2) * 100))); } }
+      }
+      scene.overrideMaterial = null; scene.fog = fog; scene.background = bg; renderer.setRenderTarget(null); renderer.setClearColor(cc, ca);
+      renderer.shadowMap.autoUpdate = au; renderer.shadowMap.needsUpdate = true;
+      hidden.forEach(o => { o.visible = true; }); noCull.forEach(o => { o.frustumCulled = true; }); rt.dispose(); dm.dispose();
+      // 腳踩的高度：擺設底下的那一點用旁邊地面的高度補（左右、上下各掃一次）
+      const ob = Math.round((GM.OB + 0.2) * 100), fl = raw.slice(), W = GM.W, H = GM.H;
+      for (let j = 0; j < H; j++) { let last = 20; for (let i = 0; i < W; i++) { const k = j * W + i; if (fl[k] > ob) fl[k] = last; else last = fl[k]; } }
+      for (let i = 0; i < W; i++) { let last = -1; for (let j = H - 1; j >= 0; j--) { const k = j * W + i; if (raw[k] > ob) { if (last >= 0) fl[k] = Math.min(fl[k], last); } else last = fl[k]; } }
+      GM.raw = raw; GM.floor = fl;
+      // 從上往下拍看不到「比相機還高、頂上沒封口」的東西（路燈桿、樹幹、高一點的垃圾桶）：
+      // 直接看模型的三角形，凡是有一部分落在身體高度（腳踝到頭）的，把它投影到地上的範圍記成擋路
+      const obm = GM.ob = new Uint8Array(W * H), v = [new T.Vector3(), new T.Vector3(), new T.Vector3()], M = new T.Matrix4(), IM = new T.Matrix4();
+      const Y0 = GM.OB, Y1 = 1.0, mark = (x, z) => { const i = Math.floor((x - GM.x0) / GM.P), j = Math.floor((z - GM.z0) / GM.P); if (i >= 0 && j >= 0 && i < W && j < H) obm[j * W + i] = 1; };
+      const seg = (a, b) => { const n = Math.max(1, Math.ceil(Math.max(Math.abs(b.x - a.x), Math.abs(b.z - a.z)) / (GM.P * 0.5))); for (let k = 0; k <= n; k++) { const t = k / n; mark(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t); } };
+      const tri = () => {
+        const ya = Math.min(v[0].y, v[1].y, v[2].y), yb = Math.max(v[0].y, v[1].y, v[2].y);
+        if (yb < Y0 || ya > Y1) return;
+        const xa = Math.min(v[0].x, v[1].x, v[2].x), xb = Math.max(v[0].x, v[1].x, v[2].x), za = Math.min(v[0].z, v[1].z, v[2].z), zb = Math.max(v[0].z, v[1].z, v[2].z);
+        if (xb < GM.x0 || za > GM.z0 + H * GM.P || xa > GM.x0 + W * GM.P || zb < GM.z0 || xb - xa > 8 || zb - za > 8) return;   // 太大片的（山、天空）不算
+        seg(v[0], v[1]); seg(v[1], v[2]); seg(v[2], v[0]);
+        if (xb - xa > GM.P * 2 && zb - za > GM.P * 2) {   // 斜的、平的面：裡面也填（只填落在身體高度那一段的近似）
+          for (let z = za; z <= zb; z += GM.P) for (let x = xa; x <= xb; x += GM.P) {
+            const d = (v[1].z - v[2].z) * (v[0].x - v[2].x) + (v[2].x - v[1].x) * (v[0].z - v[2].z); if (Math.abs(d) < 1e-9) break;
+            const l1 = ((v[1].z - v[2].z) * (x - v[2].x) + (v[2].x - v[1].x) * (z - v[2].z)) / d, l2 = ((v[2].z - v[0].z) * (x - v[2].x) + (v[0].x - v[2].x) * (z - v[2].z)) / d, l3 = 1 - l1 - l2;
+            if (l1 < 0 || l2 < 0 || l3 < 0) continue;
+            const y = l1 * v[0].y + l2 * v[1].y + l3 * v[2].y; if (y >= Y0 && y <= Y1) mark(x, z);
+          }
+        }
+      };
+      scene.updateMatrixWorld(true);
+      const hid = new Set(hidden);
+      scene.traverse(o => {
+        if (!o.isMesh || !o.visible || hid.has(o)) return;
+        for (let p = o.parent; p; p = p.parent) if (!p.visible || hid.has(p)) return;
+        const m = o.material, gg = o.geometry, pos = gg && gg.attributes && gg.attributes.position;
+        if (!pos || (m && !Array.isArray(m) && m.transparent && m.opacity < 0.7)) return;
+        if (!gg.boundingSphere) gg.computeBoundingSphere();
+        const sc = o.matrixWorld.getMaxScaleOnAxis();
+        if (!o.isInstancedMesh && gg.boundingSphere.radius * sc > 60) return;
+        const idx = gg.index, nT = idx ? idx.count / 3 : pos.count / 3, nI = o.isInstancedMesh ? o.count : 1;
+        for (let q = 0; q < nI; q++) {
+          if (o.isInstancedMesh) { o.getMatrixAt(q, IM); M.multiplyMatrices(o.matrixWorld, IM); } else M.copy(o.matrixWorld);
+          if (o.isInstancedMesh) { const cy = gg.boundingSphere.center.clone().applyMatrix4(M).y, r = gg.boundingSphere.radius * M.getMaxScaleOnAxis(); if (cy - r > Y1 || cy + r < Y0) continue; }
+          for (let t = 0; t < nT; t++) {
+            for (let c = 0; c < 3; c++) { const k = idx ? idx.getX(t * 3 + c) : t * 3 + c; v[c].fromBufferAttribute(pos, k).applyMatrix4(M); }
+            tri();
+          }
+        }
+      });
+      GM.ms = Math.round(performance.now() - t0);
+    } catch (e) { GM.raw = GM.floor = null; console.warn("ground map", e); }
+  }
+  // 走路格子的某一格裡（含身體半徑）有沒有比腳踝高很多的東西
+  function gmBlocked(x0, x1, z0, z1) {
+    if (!GM.raw) return false;
+    const ob = Math.round((GM.OB + 0.2) * 100);
+    const a = Math.max(0, Math.floor((x0 - GM.x0) / GM.P)), b = Math.min(GM.W - 1, Math.floor((x1 - GM.x0) / GM.P));
+    const c = Math.max(0, Math.floor((z0 - GM.z0) / GM.P)), e = Math.min(GM.H - 1, Math.floor((z1 - GM.z0) / GM.P));
+    for (let j = c; j <= e; j++) for (let i = a; i <= b; i++) { const k = j * GM.W + i; if (GM.raw[k] > ob || (GM.ob && GM.ob[k])) return true; }
+    return false;
   }
   function coastFrame(dt, nf, now) {
     const t = now / 1000;
@@ -2669,6 +2771,24 @@
   }
 
   /* ═════════ 相機與手勢 ═════════ */
+  /* 人跟人不要疊在一起：兩個人靠太近就互相讓開一點（坐著、躺著的人不動，只推站著的那個；推過去的地方要能走） */
+  const PERSON_GAP = 0.42;
+  function townSeparate(dt) {
+    const list = [];
+    for (const id in walkers) { const w = walkers[id]; if (w.g.visible && !w.train && w.fade > 0.3) list.push(w); }
+    const pinned = w => w.pose === "sit" || w.pose === "lie";
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j], pa = pinned(a), pb = pinned(b);
+      if (pa && pb) continue;
+      let dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, L = Math.hypot(dx, dz);
+      if (L >= PERSON_GAP) continue;
+      if (L < 1e-4) { const t = (a.phase - b.phase) * 7; dx = Math.sin(t); dz = Math.cos(t); L = 1; } else { dx /= L; dz /= L; }
+      const push = Math.min(PERSON_GAP - Math.min(L, PERSON_GAP), dt * 2.2), ka = pa ? 0 : pb ? 1 : 0.5, kb = pb ? 0 : pa ? 1 : 0.5;
+      const mv = (w, k, sx) => { if (!k) return; const nx = w.pos.x + dx * push * k * sx, nz = w.pos.z + dz * push * k * sx;
+        if (!WG.data || wFree(nx, nz) || !wFree(w.pos.x, w.pos.z)) { w.pos.x = nx; w.pos.z = nz; } };
+      mv(a, ka, -1); mv(b, kb, 1);
+    }
+  }
   function placeCamera() {
     if (FP.on && TC && walkers[TC.id]) {
       // 第一人稱：眼睛在角色頭的高度（約 1.5 公尺），看的方向由滑鼠決定
@@ -2842,6 +2962,7 @@
     const dtW = PH.freeze ? 0 : dt, ttW = PH.freeze ? PH.ft : tt;   // 拍照模式的「定格」：居民停在原地
     // 走路
     const talkingIds = new Set(bubbles.map(b => b.id));
+    if (dtW > 0) townSeparate(dtW);
     for (const id in walkers) {
       const w = walkers[id];
       let walking = false;
@@ -2874,7 +2995,9 @@
       }
       const sc0 = 1.45, sc = w.g.scale.x + (sc0 - w.g.scale.x) * Math.min(1, dtW * 5);
       w.g.scale.set(sc, sc, sc);
-      const baseY = pose === "stand" ? groundAt(w.pos.x, w.pos.z) : (w.destY || 0);
+      // 站著／走路：踩在地面高度上（上下人行道路緣時順順地抬腳，不會瞬間跳）
+      const gy = groundAt(w.pos.x, w.pos.z); w.gy = w.gy == null || Math.abs(gy - w.gy) > 0.6 ? gy : w.gy + (gy - w.gy) * Math.min(1, dtW * 14);
+      const baseY = pose === "stand" ? w.gy : (w.destY || 0);
       const bob = w.ch ? 0 : walking ? Math.abs(Math.sin(ttW * 11 + w.phase)) * 0.22 : (w.asleep || pose !== "stand" ? 0 : Math.sin(ttW * 2 + w.phase) * 0.04);
       w.g.position.set(w.pos.x, baseY + bob, w.pos.z);
       w.g.visible = !indoors && !(FP.on && TC && w.id === TC.id);
@@ -3124,6 +3247,26 @@
     fitRoomCam();
     if (RFP.on) roomFPWalls();
     if (RM.lastState) roomLight(RM.lastState);
+  }
+  // 房間地面高度：棧橋、木棧道上面高一點，其他地方是 0
+  function roomFloorY(v) { const o = RM.occ; if (!o || !o.lift) return 0; const cx = Math.floor((v.x - o.x0) / o.C), cz = Math.floor((v.z - o.z0) / o.C); return cx < 0 || cz < 0 || cx >= o.nx || cz >= o.nz ? 0 : o.lift[cz * o.nx + cx]; }
+  // 房間裡的人不要疊在一起（坐著、躺著的人不動）
+  function roomSeparate(dt) {
+    const list = Object.values(RM.ppl).filter(p => p.pos && p.g.visible !== false), GAP = 0.5;
+    const pinned = p => p.pose === "sit" || p.pose === "lie";
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j], pa = pinned(a), pb = pinned(b); if (pa && pb) continue;
+      let dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, L = Math.hypot(dx, dz);
+      if (L >= GAP) continue;
+      if (L < 1e-4) { const t = (a.phase - b.phase) * 7; dx = Math.sin(t); dz = Math.cos(t); } else { dx /= L; dz /= L; }
+      const push = Math.min(GAP - Math.min(L, GAP), dt * 1.6), ka = pa ? 0 : pb ? 1 : 0.5, kb = pb ? 0 : pa ? 1 : 0.5;
+      const mv = (p, k, sx) => { if (!k) return; const q = new T.Vector3(p.pos.x + dx * push * k * sx, 0, p.pos.z + dz * push * k * sx);
+        if (RM.occ && occAt(...cellOf(q)) && !occAt(...cellOf(p.pos))) return;
+        const dlt = q.clone().sub(p.pos); p.pos.copy(q);
+        // 站著不動的人：連目的地一起挪過去，才不會又走回原位跟人疊在一起
+        if (!(p.path && p.path.length > 1) && p.dest && p.destPose === "stand") { p.dest = p.dest.clone().add(dlt); p.sepOff = (p.sepOff || new T.Vector3()).add(dlt); } };
+      mv(a, ka, -1); mv(b, kb, 1);
+    }
   }
   /* 房間裡走路：在 0.2 公尺的格子上找一條不穿過家具的路（A*），再把路線拉直 */
   function occAt(cx, cz) { const o = RM.occ; return !o || cx < 1 || cz < 1 || cx >= o.nx - 1 || cz >= o.nz - 1 ? 1 : o.data[cz * o.nx + cx]; }
@@ -3528,6 +3671,7 @@
     RM.raf = requestAnimationFrame(roomFrame);
     const dt = Math.min(0.05, (now - (RM.last || now)) / 1000); RM.last = now;
     const tt = now / 1000;
+    if (!RM.edit) roomSeparate(dt);
     for (const id in RM.ppl) {
       const p = RM.ppl[id];
       p.g.visible = !RM.edit;
@@ -3541,15 +3685,16 @@
       if (p.manual) { walking = true; p.wantYaw = p.manual; }
       const pose = walking ? "stand" : p.destPose;
       if (pose !== p.pose) setRoomPose(p, pose);
+      const fy = roomFloorY(p.pos); p.gy = p.gy == null ? fy : p.gy + (fy - p.gy) * Math.min(1, dt * 14);   // 走上棧橋、木棧道時踩在橋面上
       if (p.ch) {
-        p.g.position.set(p.pos.x, pose === "stand" ? 0 : p.destY, p.pos.z);
+        p.g.position.set(p.pos.x, pose === "stand" ? p.gy : p.destY, p.pos.z);
         // 站著沒事時維持原本的方向（不再一律轉向鏡頭）；說話時面向對方
         const want = walking ? p.wantYaw : p.destYaw != null ? p.destYaw : p.yaw;
         p.yaw = turnTo(p.yaw, want, Math.min(1, dt * (walking ? 10 : pose !== "stand" ? 12 : 5)));
         p.ch.root.rotation.y = p.yaw;
         p.ch.update(dt, tt, { walking, asleep: p.asleep, talking: p.st.visible && !p.asleep && !!(RM.lastState && RM.lastState.talking && RM.lastState.talking.has(id)), act: walking ? null : p.actTag });
       } else {
-      const y = pose === "stand" ? (walking ? Math.abs(Math.sin(tt * 10 + p.phase)) * 0.06 : 0) : p.destY;
+      const y = pose === "stand" ? p.gy + (walking ? Math.abs(Math.sin(tt * 10 + p.phase)) * 0.06 : 0) : p.destY;
       p.g.position.set(p.pos.x, y + (pose === "stand" && !walking ? Math.sin(tt * 2 + p.phase) * 0.01 : 0), p.pos.z);
       }
       if (p.ring.visible) { const s = 1 + Math.sin(tt * 4) * 0.08; p.ring.scale.set(s, s, s); }
@@ -3713,8 +3858,8 @@
       }
       p.ctlInit = false;
       const dk = dest.x.toFixed(2) + "," + dest.z.toFixed(2);
-      if (p.destKey !== dk) { p.destKey = dk; p.path = p.pos.distanceTo(dest) > 0.05 ? roomPath(p.pos, dest) : []; }
-      p.dest = dest; p.destPose = seat ? seat.pose : "stand"; p.destY = seat ? seat.y : 0; p.destYaw = tp ? tp.yaw : seat ? seat.yaw : null;
+      if (p.destKey !== dk) { p.destKey = dk; p.sepOff = null; p.path = p.pos.distanceTo(dest) > 0.05 ? roomPath(p.pos, dest) : []; }
+      p.dest = !seat && p.sepOff ? dest.clone().add(p.sepOff) : dest; p.destPose = seat ? seat.pose : "stand"; p.destY = seat ? seat.y : 0; p.destYaw = tp ? tp.yaw : seat ? seat.yaw : null;
       p.actTag = seat ? seat.tag : null;
       const asleep = !s.where[id].avail;
       p.zz.visible = asleep; p.asleep = asleep;
@@ -4263,6 +4408,22 @@
         if (gx >= 0 && gz >= 0 && gx < WG.nx && gz < WG.nz) d[gz * WG.nx + gx] = 1;
       }
     }
+    // 人行道、廣場邊、路上的擺設（路燈、樹、長椅、郵筒、消防栓、停著的車……）：照地面高度圖擋起來
+    if (GM.raw) {
+      const skip = [];   // 地下湖隧道、各家門口留空（戶外平台上的攤子、長椅也一起照高度圖擋，平台自己的格子太粗會漏）
+      for (const id in lots) { const L = lots[id];
+        if (L.type === "lake" && GRID.lakeCell) skip.push([L.x - 1.2, L.x + 1.2, L.z - LAKE.back - 0.5, L.z + LAKE.mouth + 0.6]);
+        const dr = entryOf(id); if (dr) skip.push([dr.x - 0.6, dr.x + 0.6, dr.z - 0.3, Math.max(dr.z + 0.9, laneZ(L) + 0.5)]);   // 門口到門前小路那一段（院子的小徑）
+        if (!L.open) skip.push([L.x - 3.6, L.x + 3.6, L.z + (FRONT[L.type] || 2.2) - 0.2, L.z + 3.6]); }   // 街區裡的門前小路很窄，門口的盆栽、立牌不擋（不然整條小路會被堵死）
+      const R = 0.12;   // 身體半徑
+      for (let cz = 0; cz < WG.nz; cz++) for (let cx = 0; cx < WG.nx; cx++) {
+        const k = cz * WG.nx + cx; if (d[k] && WG.ped[k]) continue;
+        const x = WG.x0 + (cx + 0.5) * C, z = WG.z0 + (cz + 0.5) * C;
+        if (skip.some(r => x > r[0] && x < r[1] && z > r[2] && z < r[3])) continue;
+        if (gmBlocked(x - C / 2 - R, x + C / 2 + R, z - C / 2 - R, z + C / 2 + R)) { d[k] = 1; WG.ped[k] = 1; }
+      }
+      GM.raw = GM.ob = null;   // 走路格子算好就用不到了（省手機記憶體，地面高度只留 GM.floor）
+    }
     return WG;
   }
   // 裝飾街區的中庭巷口開在哪一邊（朝廣場那側優先，比較常被走到）：'w'、'e' 或沒有
@@ -4735,7 +4896,7 @@
     capture(cb) { PH.shot = cb; }
   };
 
-  N.town3d_debug = () => ({ scene, wPath, routeTo, cars, roadNet: () => roadNet, groundAt, COAST, walkGrid, alleyOf, ENTR, camera, FP, GRID, cam, TC, WG, walkers, lots, RM, occAt, cellOf, roomPath, buildRoom });
+  N.town3d_debug = () => ({ scene, wPath, routeTo, cars, roadNet: () => roadNet, groundAt, COAST, walkGrid, alleyOf, ENTR, camera, FP, GRID, cam, TC, WG, walkers, lots, RM, occAt, cellOf, roomPath, buildRoom, GM, buildGroundMap, entryOf });
   N.town3d = { rotate: a => { cam.fly = null; const a0 = cam.az, t0 = performance.now(); const step = () => { const k = Math.min(1, (performance.now() - t0) / 350); cam.az = a0 + a * (1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); }; step(); }, setAnomaly, supported, mount, unmount, update, say, emote: townEmote, focus, flyRegion, flyLoc, setLabels, setXray, setDirector, home, pause,
     isFollowing: () => cam.follow, unfollow: () => { cam.follow = null; }, isReady: () => built, ctl: tCtl, photo };
 })();
