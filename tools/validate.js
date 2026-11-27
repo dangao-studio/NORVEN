@@ -117,3 +117,19 @@ console.log("festivals checked");
   for (const c in N.wishes) if (!chars.includes(c)) warn("wish char", c);
   console.log("wishes checked:", seen.size, "problems so far:", problems);
 }
+
+// 自己做點什麼（data/doings.js）：每人都有喜歡的事和答應的話、用途都有定義、人名存在、沒有破折號
+{
+  vm.runInContext(fs.readFileSync(path.join(root, "data/doings.js"), "utf8"), ctx, { filename: "data/doings.js" });
+  const D = N.doings, U = D.uses, dash = t => /[—–]/.test(t);
+  let n = 0;
+  for (const k in U) { if (!U[k].icon || !U[k].label || !U[k].act || !(U[k].min > 0)) warn("doing use", k); if (dash(U[k].label) || dash(U[k].act)) warn("dash doing", k); for (const c of U[k].only || []) if (!chars.includes(c)) warn("doing only", k, c); }
+  for (const t in D.useOf) if (!U[D.useOf[t]]) warn("doing useOf", t, D.useOf[t]);
+  for (const c of chars) {
+    const L = D.likes[c]; if (!L || Object.keys(L).length < 4) warn("few doing likes", c);
+    for (const k in L || {}) { n++; if (!U[k]) warn("doing like use", c, k); else if (U[k].only && !U[k].only.includes(c)) warn("doing like not allowed", c, k); if (dash(L[k])) warn("dash doing", c, k); }
+    if (!D.ok[c] || D.ok[c].length < 2) warn("doing ok", c); else for (const t of D.ok[c]) if (dash(t)) warn("dash doing ok", c);
+  }
+  for (const c in D.no) { if (!chars.includes(c)) warn("doing no char", c); for (const k of D.no[c]) if (!U[k]) warn("doing no use", c, k); }
+  console.log("doings checked:", Object.keys(U).length, "uses,", n, "lines; problems so far:", problems);
+}

@@ -2,7 +2,7 @@
 
 這是一個手機優先的「小鎮觀察」網頁 App（PWA）。世界觀與 16 位角色是使用者的原創設定（時間融合時代 × 蓋亞聯邦，小鎮「諾文」）。使用者想要的感覺是：**他們在一個地方好好活著**，玩家主要是觀察，偶爾互動。
 
-目前版本：v3.27.1
+目前版本：v3.28.0
 
 ---
 
@@ -235,3 +235,12 @@ node tools/validate.js .      # 檢查行程、地點、事件能不能觸發、
 - v3.27.0：房間 360° 轉＋透明牆＋說話特寫。voxroom `build()` 在家具擺好、算完 occupancy 之後呼叫 `outerWalls()` 補右牆和前牆（前牆中間門寬 1 公尺、高 2.1 公尺，有門框、門板、門把），所以不影響擺放和走路的格子；`toMeshes(T, G, { side })` 依 `sideOf(x, y, z)` 把四面牆（踢腳板 y≥2 以上）各自做成一組網格（`meshes.walls[L|B|R|F] = { meshes, winMat }`，各自的材質）。L 形房間（`cut`）的內轉角牆算 R、切角的後牆算 B。town3d：`RM.walls`（side、法線 n、op），`wallFade(dt)` 每幀依鏡頭方向把擋住鏡頭的牆淡到 0.08（第一人稱全部實心），淡掉的牆不投影、不寫深度、點擊（ctlTap）略過。`roomFPWalls()` 在有方塊牆時不再另外蓋右牆、前牆，門板改成看不見、只拿來判斷準心對到門。鏡頭：`RM.az`（不再限制在 ±0.55，可以一直轉）、`RM.el`（俯角，滑鼠或 touch-action:none 的畫面上下拖，0.22～1.25）、`RM.zu`（玩家縮放，`setRoomZoom()`）；實際鏡頭 `RM.azC`／`RM.elC` 平滑追過去。說話特寫：`stageInfo()` 拿 `lastState.talking` 裡在這層的人，兩人以上從側面偏 0.32 看、一個人從他面前偏 0.45，縮放依距離算（1.35～3），俯角壓到 0.44、目標偏向說話的人 22%；`RM.stManual`：特寫中玩家自己轉過就不搶。`stageBars()` 在 host 裡加 `.room-lb` 上下黑邊（下方顯示〈標題〉）。新 API：`N.room3d.cue(說話的人, 標題)`（app 的 updateRoom push 和 lineEmote 會呼叫）、`view()`（測試用：az、el、zoom、stage、每面牆透明度）、`rotate(da, el)`。`floorUI()` 加 `.room-rot` ⟲ ⟳（每次 90°），第一人稱時隱藏（host 的 `.room-fp`）。app：觀察中有人說話時平面圖卡片加 `.on-stage`（sticky 黏在上方、房間 260px）。
 - v3.27.0（續）：貼牆的家具跟著牆一起變透明。voxroom `build()` 記下每件家具的方塊（`wallItems`），`withWallItems()` 包住 `outerWalls()` 的 sideOf：掛牆裝飾（`WALLHANG`）離牆 0.4 公尺內、其他東西離牆 0.2 公尺內且高過 1.1 公尺（書櫃、衣櫃）就算那面牆；長邊沿 x 的只貼後／前牆、沿 z 的只貼左／右牆（L 形房間內轉角附近才不會判錯）。淡掉的牆透明度改成 0.03。
 - v3.27.1：穿模排查。（1）小鎮地面高度圖 `GM`（town3d `buildGroundMap()`，蓋完小鎮、`blockify` 之後跑一次）：用 `MeshDepthMaterial`（RGBA 打包）從 0.7 高往下拍正交深度照，每格 0.1 單位，算出腳踩的高度（`GM.floor`，擺設底下用旁邊地面補），`groundAt()` 在橋、島之外改查這張圖，人行道（體素 0.23）、院子、平台、廣場都踩在表面上，不再陷進去；居民站著時 `w.gy` 平滑追高度（上下路緣不跳）。拍照時藏起 sprite、點、線、半透明材質、居民、`buildLife()` 加的會動的東西（`GM.dyn0`～`GM.dyn1`）和火車；InstancedMesh 暫時關掉 frustumCulled（外框只算第一個實例，分塊拍會被誤剪）。另外直接掃一遍三角形（`GM.ob`）：凡是有一段落在腳踝到頭（0.42～1.0）的三角形，投影到地上記成擋路，補上「比相機高、頂上沒封口」的路燈桿、樹幹、高垃圾桶（太大片的、超過 8 單位的三角形不算）。`walkGrid()` 最後依 `gmBlocked()`（`GM.raw` 超過 0.42 或 `GM.ob`，含身體半徑 0.12）把 `WG.data` 和 `WG.ped` 都擋起來，擋完就把 `GM.raw`、`GM.ob` 丟掉（只留 `GM.floor`）；不擋的地方：地下湖隧道、每家門口到門前小路、街區裡的門前小路那一條（太窄，擋了會整條堵死）。手機簡化、輕量城市、高畫質三種畫質都驗過：32 個地點兩兩之間 992 條路線都找得到；建圖時間在雲端軟體繪圖約 0.8～1.6 秒。測試用 `N.town3d_debug()` 多了 `GM`、`buildGroundMap`、`entryOf`。（2）人跟人不重疊：小鎮 `townSeparate()`（間距 0.42 單位）、房間 `roomSeparate()`（0.5 公尺），兩人太近就各讓一半，坐著、躺著的人不動只推另一個，推過去的位置要能走；房間裡站著的人連目的地一起挪（`p.sepOff`，換目的地時清掉），才不會走回原位又疊在一起。（3）地下湖展示空間：voxroom 新旗標 `F_WATER`（`B.paint(..., f)` 第 7 個參數，`water` 用）和 `F_DECK`（`dock` 的橋面、木樁用）。`occupancy()` 水面那格不能走、橋面不算擋路，回傳的 `occ.lift` 是站在橋面上的高度（0.3），town3d `roomFloorY()` 讓走路的人踩在橋面上（`p.gy` 平滑）。其他有 `water` 的房間（港邊）也一樣不能走進水裡。
+
+## v3.28.0 可以互動的東西、自己做點什麼
+- 新資料 `data/doings.js`（`N.doings`）：`uses`（每種「可以做的事」的圖示、選單文字、act、做多久、小動作 anim、`only` 只有誰會做）、`useOf`（家具種類 → 預設用途）、`likes`（每人喜歡的事＋選了之後說的話，選單上標 ⭐）、`ok`（隨口答應的話）、`no`（不會去做的事）。`tools/validate.js` 會檢查。
+- 新程式 `js/doings.js`（`N.selfDo`）：點居民 →「✨ 自己做點什麼」（3D 人物卡、觀察頁都有）。列出他所在地點的家具能做的事（讀 `N.interiors`，有房間編輯器改過就用改過的；別人的床不睡），另外推薦同區別的公共場所他喜歡、這裡沒有的事（最多兩個）。選了就寫 `s.assign[id] = { loc, untilAbs, act, use, self: true, floor }`；engine `whereabouts` 把 `use`、`floor` 帶到 `where[id]`。
+- town3d：`furn()` 替每個座位標 `use`、`anim`（站在前面用的東西照 `FRONT_USE` 自動加一個站位，`tag: "use"`，一般人不會被分到）。房間 `seatPeople()`、小鎮平台都先讓有 `use` 的人占那個位置；`floorOf()` 尊重 `w.floor`；`use === "nap"` 躺下時顯示 💤。沒事站著的人（小鎮平台、房間裡閒晃的人）偶爾自己走去用旁邊的東西（`useOK()` 照 only／no）。操控模式的圓環選單也改用 doings 的說法（買罐飲料、盪鞦韆……）。
+- 新家具（voxroom `vfurn`）：`swing` 鞦韆、`picnic` 野餐墊、`viewer` 投幣望遠鏡、`claw` 夾娃娃機、`arcade` 街機、`kettle` 茶水櫃、`tackle` 釣具箱；房間編輯器也能放。原本只是擺設的噴泉（坐池邊）、販賣機、書報攤（客人位）、公布欄、井、攤位（客人位）、地下湖碼頭（坐著釣魚）、書櫃、唱盤、魚缸、望遠鏡、梳妝台、鏡子、壁爐、魔藥鍋、貓頭鷹棲木、貓窩、冰箱、零食、衣架、地球儀、異次元箱都能用了。
+- 擺放：公園加鞦韆、野餐墊；河岸步道加投幣望遠鏡、野餐墊；轉角騎樓加夾娃娃機；立體街廊加街機；癇癪家、工科宿舍加街機；ミニクイ家、沙布堤亞宿舍、梅魯塔塔屋、偵探社 1 樓加茶水櫃；瑞特家加釣具箱。
+- blocky 新小動作：swing、drink、look、peer、scope、play、fish、listen、pet、browse、warm。
+

@@ -578,6 +578,59 @@
       case "bike": B(0.8, 0.1, 0.1, 0x3A6E9A, 0, 0.3, 0); B(0.1, 0.3, 0.3, 0x2A2A2A, -0.35, 0, 0); B(0.1, 0.3, 0.3, 0x2A2A2A, 0.35, 0, 0); B(0.2, 0.1, 0.1, 0x2A2A2A, -0.1, 0.5, 0); B(0.1, 0.2, 0.2, 0x2A2A2A, 0.3, 0.4, 0); break;
       case "bunting": for (let i = 0; i < 10; i++) B(0.1, 0.2, 0.1, pick([0xF07A9A, 0xF4D35E, 0x4AC8E8, 0x8EEA3A], i), -1.4 + i * 0.3, 2.2, 0); break;
       case "mag": B(0.2, 0.3, 0.1, 0xC0603F, 0, 0, 0); break;
+      /* ── 居民可以自己去用的東西（data/doings.js） ── */
+      case "swing": {   // 鞦韆：兩根 A 字架、上面一根橫桿、兩個木頭座板用繩子吊著
+        const fr = 0x3A6E9A;
+        for (const sx of [-1.1, 1.1]) { B(0.1, 2.0, 0.1, fr, sx, 0, -0.35); B(0.1, 2.0, 0.1, fr, sx, 0, 0.35); B(0.1, 0.1, 0.8, fr, sx, 1.9, 0); B(0.1, 0.1, 0.5, fr, sx, 1.0, 0); }
+        B(2.3, 0.1, 0.1, mix(fr, 0x000000, 0.2), 0, 2.0, 0);
+        for (const x of [-0.45, 0.45]) {
+          B(0.5, 0.1, 0.3, 0x9A6A40, x, 0.4, 0, 0, (i, j, k) => (i + k) % 3 ? 0x9A6A40 : 0x8A5A34);
+          for (const dx of [-0.2, 0.2]) B(0.1, 1.5, 0.1, 0xB8B0A0, x + dx, 0.5, 0);
+        }
+        break; }
+      case "picnic": {  // 野餐墊：紅白格子布、兩個坐墊、一個藤籃
+        B.paint(1.6, 1.2, 0xD84A4A, 0, 0, (i, j, k) => ((i >> 1) + (k >> 1)) % 2 ? 0xF4F0E4 : 0xD84A4A);
+        for (const x of [-0.42, 0.42]) B(0.4, 0.1, 0.4, x < 0 ? 0xF4D35E : 0x8EC8E8, x, 0.1, 0.1);
+        B(0.4, 0.2, 0.3, 0xB88A5A, 0, 0, -0.4, 0, (i, j) => j === 1 ? 0x9A6A3A : 0xB88A5A); B(0.1, 0.2, 0.1, 0x8A5A34, -0.15, 0.2, -0.4); B(0.1, 0.2, 0.1, 0x8A5A34, 0.15, 0.2, -0.4); B(0.4, 0.1, 0.1, 0x8A5A34, 0, 0.4, -0.4);
+        B(0.1, 0.1, 0.1, 0xE84A4A, 0.25, 0.1, -0.25); B(0.2, 0.1, 0.2, 0xF4E1A6, -0.3, 0.1, -0.3);
+        break; }
+      case "viewer": {  // 投幣望遠鏡：腳架、投幣箱、兩個鏡筒朝前
+        const m = 0x3A7A6A;
+        B(0.4, 0.1, 0.4, 0x5A5A62, 0, 0, 0); B(0.1, 1.0, 0.1, m, 0, 0.1, 0);
+        B(0.3, 0.3, 0.3, m, 0, 1.0, 0, 0, (i, j, k) => (k === 0 && j === 1 && i === 1) ? 0xD8B04A : m);
+        B(0.1, 0.2, 0.4, mix(m, 0x000000, 0.25), -0.1, 1.1, 0.25); B(0.1, 0.2, 0.4, mix(m, 0x000000, 0.25), 0.1, 1.1, 0.25);
+        B(0.1, 0.1, 0.1, 0xCFE8F0, -0.1, 1.2, 0.45, F_GLOW); B(0.1, 0.1, 0.1, 0xCFE8F0, 0.1, 1.2, 0.45, F_GLOW);
+        break; }
+      case "claw": {    // 夾娃娃機：玻璃箱裡一堆布偶、上面一個爪子、前面的搖桿
+        const m = 0xE86AA8;
+        B(0.8, 0.8, 0.8, m, 0, 0, 0, 0, (i, j, k, ni, nj, nk) => (k === nk - 1 && j === 4 && i > 1 && i < 6) ? 0x2A2A32 : m);
+        B(0.8, 0.8, 0.8, 0xCFE8F0, 0, 0.8, 0, F_GLOW, (i, j, k, ni, nj, nk) => {
+          if (i > 0 && i < ni - 1 && k > 0 && k < nk - 1 && j > 0) return j < 3 ? pick([0xF4D35E, 0x8EC8E8, 0xF2B5C9, 0xFFFFFF, 0xA8E08A], i * 3 + k * 5 + j) : null;
+          return (i === 0 || i === ni - 1) && (k === 0 || k === nk - 1) ? m : (j === 0 ? m : 0xCFE8F0);
+        });
+        B(0.8, 0.2, 0.8, m, 0, 1.6, 0); B(0.1, 0.2, 0.1, 0xC0C0C8, 0, 1.4, 0); B(0.3, 0.1, 0.1, 0xC0C0C8, 0, 1.3, 0);
+        B(0.1, 0.2, 0.1, 0x2A2A32, -0.2, 0.8, 0.45); B(0.1, 0.1, 0.1, 0xE84A4A, -0.2, 1.0, 0.45); B(0.1, 0.1, 0.1, 0xF4D35E, 0.15, 0.85, 0.45, F_GLOW);
+        B.light(0, 1.2, 0.3, 0xFFC8E8, 0.4); break; }
+      case "arcade": {  // 街機台：發光的螢幕、按鈕、側面貼紙
+        const m = 0x2A2C4A;
+        B(0.7, 1.8, 0.6, m, 0, 0, 0, 0, (i, j, k, ni) => (i === 0 || i === ni - 1) && j > 4 && j < 14 && (j + k) % 4 === 0 ? 0x8EEA3A : m);
+        B(0.5, 0.4, 0.1, 0x3AA8E8, 0, 1.1, 0.3, F_GLOW, (i, j) => (i + j * 2) % 5 === 0 ? 0xF4D35E : (j === 1 && i === 2) ? 0xFF4AC8 : 0x3AA8E8);
+        B(0.7, 0.1, 0.3, mix(m, 0xFFFFFF, 0.15), 0, 0.9, 0.35);
+        B(0.1, 0.1, 0.1, 0xE84A4A, -0.15, 1.0, 0.4, F_GLOW); B(0.1, 0.1, 0.1, 0x8EEA3A, 0.05, 1.0, 0.4, F_GLOW); B(0.1, 0.1, 0.1, 0xF4D35E, 0.2, 1.0, 0.4, F_GLOW);
+        B(0.5, 0.2, 0.1, 0xFF4AC8, 0, 1.6, 0.3, F_GLOW);
+        B.light(0, 1.2, 0.5, 0x7AC8FF, 0.4); break; }
+      case "kettle": {  // 小茶水櫃：熱水壺、杯子、一疊泡麵或茶罐
+        const w = c || 0x8E6A45;
+        B(0.7, 0.7, 0.4, w, 0, 0, 0, 0, (i, j) => j === 3 ? mix(w, 0x000000, 0.2) : w);
+        B(0.2, 0.3, 0.2, 0xE8E4DC, -0.2, 0.7, 0); B(0.1, 0.1, 0.1, 0x3A3A42, -0.2, 1.0, 0); B(0.1, 0.1, 0.1, 0xE8E4DC, -0.05, 0.85, 0);
+        B(0.1, 0.1, 0.1, 0xF4F0E4, 0.05, 0.7, 0.1); B(0.1, 0.1, 0.1, 0xC2455A, 0.15, 0.7, 0.1);
+        for (let i = 0; i < 3; i++) B(0.2, 0.1, 0.2, [0xE84A4A, 0xF4D35E, 0xE84A4A][i], 0.22, 0.7 + i * 0.1, -0.05);
+        break; }
+      case "tackle": {  // 釣具箱：打開的蓋子、一格一格的浮標和魚鉤，旁邊一捆線
+        B(0.7, 0.3, 0.4, 0x2E6A5A, 0, 0, 0); B(0.7, 0.3, 0.1, 0x2E6A5A, 0, 0.3, -0.2);
+        for (let i = 0; i < 5; i++) B(0.1, 0.1, 0.1, pick([0xE84A4A, 0xF4D35E, 0xFFFFFF, 0x4AA8E8], i), -0.25 + i * 0.12, 0.3, 0.05);
+        B(0.2, 0.1, 0.2, 0xC8C0A8, 0.45, 0, 0.1); B(0.1, 0.1, 0.1, 0x8A8A92, 0.45, 0.1, 0.1);
+        break; }
     }
   }
   function mix(a, b, k) {
@@ -987,7 +1040,7 @@
   const OUTK = { tree: 2.6, streetlamp: 1.6, fountain: 2, stonelamp: 1.3, well: 1.4, bush: 1.5, flowers: 1.3, newsstand: 1.25, stall: 1.4, rocks: 1.4, plant: 1.4 };
   const rotXZ = (rot, x, z) => { const q = Math.round((((rot || 0) % 360 + 360) % 360) / 90) % 4; return q === 0 ? [x, z] : q === 1 ? [z, -x] : q === 2 ? [-x, -z] : [-z, x]; };
   // 背面朝牆的家具：離牆不到 1 公尺就往後推到貼牆
-  const WALLY = /^(bed|desk|magicdesk|computer|shelf|vanity|sideboard|curio|clothes|fireplace|stove|oven|fridge|breadrack|filing|lockers|vending|herbs|scrolls|radios|display|altar|dimbox|piano|servers|record|typewriter)$/;
+  const WALLY = /^(bed|desk|magicdesk|computer|shelf|vanity|sideboard|curio|clothes|fireplace|stove|oven|fridge|breadrack|filing|lockers|vending|herbs|scrolls|radios|display|altar|dimbox|piano|servers|record|typewriter|arcade|kettle|claw)$/;
   function snapWall(ctx, type, o, x, z) {
     if (!WALLY.test(type)) return [x, z];
     const q = Math.round((((o.rot || 0) % 360 + 360) % 360) / 90) % 4;
@@ -1205,7 +1258,7 @@
   }
   /* 自動擺放：靠牆的東西貼著後牆或左牆，其他的找地板上的空位（離別的家具留 0.3 公尺） */
   const SIZE = { oillamp: [0.3, 0.3], nightstand: [0.5, 0.45, 1], coffeetable: [1.0, 0.6], island: [1.4, 0.8], sideboard: [1.5, 0.6, 1], curio: [0.9, 0.5, 1], frames: [1.0, 0.2, 2], wallshelf: [1.0, 0.3, 2], hangplant: [0.4, 0.3, 2], pots: [0.8, 0.4, 1], sconce: [0.4, 0.2, 2], plant: [0.5, 0.5], shelf: [1.0, 0.5, 1], sofa: [1.6, 0.8], table: [1.6, 1.6], longtable: [2.8, 1.8], desk: [1.1, 1.1, 1], lamp: [0.4, 0.4], clock: [0.5, 0.2, 2],
-    poster: [0.7, 0.2, 2], board: [1.3, 0.2, 2], map: [1.2, 0.2, 2], bookpile: [0.5, 0.5], boxes: [0.7, 0.7], crates: [0.9, 0.9], catbed: [0.6, 0.6], record: [0.6, 0.5, 1],
+    poster: [0.7, 0.2, 2], board: [1.3, 0.2, 2], arcade: [0.8, 0.8, 1], kettle: [0.8, 0.6, 1], claw: [0.9, 0.9, 1], tackle: [0.9, 0.6], viewer: [0.6, 0.8], swing: [2.6, 1.0], picnic: [1.8, 1.4], map: [1.2, 0.2, 2], bookpile: [0.5, 0.5], boxes: [0.7, 0.7], crates: [0.9, 0.9], catbed: [0.6, 0.6], record: [0.6, 0.5, 1],
     globe: [0.5, 0.5], fridge: [0.8, 0.7, 1], beanbag: [0.8, 0.8], readchair: [0.8, 0.8], flowers: [0.5, 0.5], candles: [0.4, 0.4], mirror: [0.7, 0.2, 2], clothes: [1.1, 0.6, 1],
     vanity: [1.0, 0.9, 1], filing: [0.6, 0.6, 1], lockers: [1.3, 0.5, 1], vending: [0.9, 0.8, 1], bench: [1.5, 0.6], bench2: [1.4, 0.5], tree: [1.4, 1.4], bush: [0.9, 0.9],
     streetlamp: [0.5, 0.5], trash: [0.5, 0.5], crystal: [0.5, 0.5], skulls: [0.7, 0.4, 1], cauldron: [0.9, 0.9], telescope: [0.7, 0.7], typewriter: [0.8, 1.1, 1], herbs: [0.9, 0.5, 1],

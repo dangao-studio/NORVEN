@@ -98,13 +98,25 @@
         H[1] = Math.abs(look) > 1.2 ? Math.sign(look) * 0.45 : look * 0.12;
         H[0] = Math.sin(tt * 0.37 + ph) * 0.05;
       }
-    } else if (st.pose === "sit") { L[0] = R[0] = -0.5; H[1] = Math.sin(tt * 0.3 + ph) * 0.15; }
+    } else if (st.pose === "sit") { L[0] = R[0] = -0.5; H[1] = Math.sin(tt * 0.3 + ph) * 0.15; ll.rotation.x = rl.rotation.x = -Math.PI / 2; }
     // 正在做的事
     const act = !walking && !o.asleep && !o.talking ? o.act : null;
     if (act === "cook") { L[0] = -1.0 + Math.sin(tt * 5 + ph) * 0.18; R[0] = -1.1 + Math.sin(tt * 5 + ph + 2) * 0.18; L[1] = 0.15; R[1] = -0.15; H[0] = 0.3; }
     else if (act === "study") { L[0] = R[0] = -1.05; L[1] = 0.2; R[1] = -0.2; H[0] = 0.35 + Math.sin(tt * 0.5 + ph) * 0.05; if (Math.sin(tt * 0.4 + ph) > 0.97) R[1] = -0.5; }
     else if (act === "drum") { L[0] = -0.9 + Math.sin(tt * 13 + ph) * 0.45; R[0] = -0.9 + Math.sin(tt * 13 + ph + 3) * 0.45; H[0] = Math.sin(tt * 6.5) * 0.12; }
     else if (act === "work") { R[0] = -1.1 + Math.abs(Math.sin(tt * 4 + ph)) * 0.6; L[0] = -0.9; H[0] = 0.3; }
+    // 用東西（data/doings.js）：盪鞦韆、喝飲料、看東西、夾娃娃、釣魚、聽音樂、摸貓、翻東西、烤火
+    else if (act === "swing") { const w = Math.sin(tt * 2.2 + ph); L[0] = R[0] = -2.4; L[1] = 0.12; R[1] = -0.12; B[0] = -w * 0.18; ll.rotation.x = rl.rotation.x = -Math.PI / 2 + w * 0.45; H[0] = w * 0.1; }
+    else if (act === "drink") { const c = (tt * 0.3 + ph) % 1; if (c < 0.35) { R[0] = -2.1; R[1] = 0.3; H[0] = -0.25; } else R[0] = -0.7; }
+    else if (act === "look") { H[0] = 0.15 + Math.sin(tt * 0.4 + ph) * 0.08; H[1] = Math.sin(tt * 0.25 + ph) * 0.3; L[0] = -0.2; R[0] = Math.sin(tt * 0.5 + ph) > 0.9 ? -1.4 : -0.3; }
+    else if (act === "peer") { B[0] = 0.28; H[0] = 0.5; L[0] = R[0] = -0.9; L[1] = 0.25; R[1] = -0.25; }
+    else if (act === "scope") { L[0] = R[0] = -1.5; L[1] = 0.35; R[1] = -0.35; H[0] = 0.05; H[1] = Math.sin(tt * 0.3 + ph) * 0.1; B[0] = 0.08; }
+    else if (act === "play") { R[0] = -1.15 + Math.sin(tt * 9 + ph) * 0.12; R[1] = -0.1 + Math.sin(tt * 4 + ph) * 0.15; L[0] = -1.15; L[1] = 0.2; H[0] = 0.2; if (Math.sin(tt * 0.7 + ph) > 0.95) { L[0] = -2.6; } }
+    else if (act === "fish") { const tug = Math.sin(tt * 0.6 + ph) > 0.96; L[0] = R[0] = tug ? -1.9 : -1.2 + Math.sin(tt * 1.3 + ph) * 0.05; L[1] = 0.25; R[1] = -0.25; H[0] = 0.15; }
+    else if (act === "listen") { H[0] = Math.abs(Math.sin(tt * 3.2 + ph)) * 0.16; H[2] = Math.sin(tt * 1.6 + ph) * 0.06; L[0] = -0.15; R[0] = -0.15; }
+    else if (act === "pet") { B[0] = 0.3; H[0] = 0.4; R[0] = -1.3 + Math.sin(tt * 5 + ph) * 0.15; L[0] = -0.5; }
+    else if (act === "browse") { const c = (tt * 0.25 + ph) % 1; R[0] = c < 0.3 ? -1.5 : -0.4; R[1] = c < 0.3 ? -0.2 : 0; H[1] = Math.sin(tt * 0.5 + ph) * 0.35; H[0] = 0.1; }
+    else if (act === "warm") { L[0] = R[0] = -1.2; L[1] = 0.3; R[1] = -0.3; H[0] = 0.12; B[1] += Math.sin(tt * 1.2 + ph) * 0.004; }
     else if (act === "eat") { const c = (tt * 0.4 + ph) % 1; if (c < 0.2) { R[0] = -2.0; R[1] = 0.35; } else R[0] = st.pose === "sit" ? -0.9 : -0.4; L[0] = st.pose === "sit" ? -0.8 : -0.2; }
     // 說話：每隔一兩秒換一個手勢
     if (o.talking && !o.asleep) {

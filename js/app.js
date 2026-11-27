@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.27.1";
+  const VERSION = "3.28.0";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -132,7 +132,7 @@
       const a = s.assign[k];
       if (a.untilAbs == null) a.untilAbs = clock.abs + Math.max(0, Math.round(((a.until || 0) - Date.now()) / 60000));  // 舊版資料轉換
       if (a.untilAbs <= clock.abs) { if (!peek) delete s.assign[k]; continue; }
-      active[k] = { loc: a.loc, act: a.act, until: Date.now() + (a.untilAbs - clock.abs) * 60000 };
+      active[k] = { loc: a.loc, act: a.act, until: Date.now() + (a.untilAbs - clock.abs) * 60000, use: a.use, floor: a.floor };
     }
     return E.whereabouts(clock, ov, Object.assign({}, autoNeeds(clock), autoOutings(clock), autoVisits(clock), N.life ? N.life.plansAt(clock) : {}, active));
   }
@@ -530,6 +530,7 @@
       ${comp.length ? `<div class="card3d-with">${comp.map(o => person(o, 20)).join("")}<span>和${esc(comp.join("、"))}在一起</span></div>` : ""}
       <div class="card3d-act">
         ${N.mood ? N.mood.buttonHTML(id, c) : ""}
+        ${N.selfDo ? N.selfDo.buttonHTML(id, c) : ""}
         <button type="button" class="btn primary" data-observe="${esc(id)}">${s.observing === id ? "回到觀察" : "👀 觀察"}</button>
         <button type="button" class="btn soft" data-follow3d="${esc(id)}">📍 跟著看</button>
         ${w.avail && N.interiors && N.interiors[w.loc] ? `<button type="button" class="btn soft" data-ctlstart="${esc(id)}">🎮 操控</button>` : ""}
@@ -816,6 +817,7 @@
         ${N.life ? N.life.carryHTML(x.id) : ""}
         <div class="obs-tools">
           ${N.mood && !busy ? N.mood.buttonHTML(x.id, c, where) : ""}
+          ${N.selfDo && !busy ? N.selfDo.buttonHTML(x.id, c, where) : ""}
           <button type="button" class="btn soft" id="assignBtn" ${busy ? "disabled" : ""}>🧭 指派去…</button>
           <button type="button" class="btn soft" id="interactBtn" ${busy ? "disabled" : ""}>💬 找人互動</button>
           <button type="button" class="btn soft" id="phoneBtn">📱 偷看手機</button>
@@ -2778,6 +2780,9 @@
     if (d.loc) return openLocation(d.loc);
     if (d.wishopen && N.mood) { if (N.mood.pending(clockNow()).has(d.wishopen)) { hideCard3d(); return N.mood.open(d.wishopen); } closeSheet(); return startObserve(d.wishopen); }
     if (d.wishpick !== undefined && N.mood) return N.mood.pick(+d.wishpick);
+    if (d.doopen && N.selfDo) { hideCard3d(); return N.selfDo.open(d.doopen); }
+    if (d.dopick && N.selfDo && sheetState && sheetState.type === "doings") return N.selfDo.pick(sheetState.who, d.dopick, d.doloc, d.dofloor);
+    if (d.dostop && N.selfDo) return N.selfDo.stop(d.dostop);
     if (d.observe) { closeSheet(); return startObserve(d.observe); }
     if (d.close !== undefined) return closeSheet();
     if (t.id === "obsPill") return nav("observe");
@@ -3044,6 +3049,10 @@
     bump: (a, b, amt) => { const r = Object.assign({}, getRel(a, b)); r.pts = Math.min(r.route || r.status ? 100 : 84, r.pts + amt); setRel(a, b, r); },
     sheet: (st, html) => { const was = !$("#sheet").hidden && sheetState && sheetState.type === "wish"; sheetState = st; $("#sheetBody").innerHTML = html; if (was) $("#sheet").scrollTop = $("#sheet").scrollHeight; else openSheet(); },
     after: () => { if (view === "residents" || view === "observe") { const y = window.scrollY; render(); window.scrollTo(0, y); } } });
+  if (N.selfDo) N.selfDo.init({ slot, save, clockNow, currentWhere, stayFor, esc, person, locName, toast, openSheet, closeSheet,
+    setSheet: st => { sheetState = st; }, sheetBody: html => { $("#sheetBody").innerHTML = html; },
+    say: (id, text) => { if (use3d() && N.town3d && N.town3d.isReady()) N.town3d.say(id, text, "", 400); },
+    render: () => { const y = window.scrollY; render(); window.scrollTo(0, y); if (card3d && $("#t3dCard") && !$("#t3dCard").hidden) showCard3d(card3d); if (use3d() && N.town3d && N.town3d.isReady()) N.town3d.update(state3d(clockNow())); } });
   // 啟動
   (function boot() {
     // 舊進度裡若有不符合規則的戀愛線（例如未成年角色），一律改回朋友關係

@@ -982,3 +982,20 @@ html.dark .mood-chip.mood-blue { background: #2C3140; color: #A9B3C9; }
 .room-floors { z-index: 3; }
 .room-fp .room-rot, .room-fp .room-lb { display: none; }
 .ctl-stage .room-lb span { display: none; }
+
+/* ═════ 自己做點什麼（js/doings.js） ═════ */
+.card3d-act:has([data-doopen]) { flex-wrap: wrap; }
+.card3d-act [data-doopen] { flex: 1 1 100%; }
+.obs-tools [data-doopen] { grid-column: 1 / -1; }
+.btn.doing { background: var(--teal-soft); color: var(--teal); border-color: color-mix(in srgb, var(--teal) 35%, transparent); font-weight: 700; }
+.do-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 14px; }
+.do-opt { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 6px 10px; text-align: left; border-radius: 12px;
+  background: var(--bg2); color: var(--ink); border: 1px solid var(--line); font: inherit; font-size: 14px; line-height: 1.3; cursor: pointer; position: relative; }
+.do-opt:active { transform: scale(.98); }
+.do-opt.liked { padding-right: 22px; border-color: color-mix(in srgb, var(--brass) 55%, transparent); background: var(--brass-soft); }
+.do-ic { font-size: 22px; flex: none; width: 28px; text-align: center; }
+.do-lb { flex: 1; min-width: 0; }
+.do-star { position: absolute; top: 3px; right: 6px; font-size: 11px; }
+.do-h { margin: 6px 0 6px; font-size: 14px; color: var(--ink2); }
+.do-now { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.do-now .btn { min-height: 44px; }

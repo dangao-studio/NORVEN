@@ -306,7 +306,7 @@ NOVUM.interiors = {
   ] },
   "諾文轉角騎樓": { outdoor: true, theme: { ground: "tile" }, items: [
     ["newsstand", 0.25, 0.1, {}], ["trash", 0.42, 0.06, {}],
-    ["vending", 0.05, 0.38, { rot: 90 }], ["vending", 0.05, 0.52, { rot: 90 }],
+    ["vending", 0.05, 0.38, { rot: 90 }], ["vending", 0.05, 0.52, { rot: 90 }], ["claw", 0.05, 0.68, { rot: 90 }],
     ["bike", 0.68, 0.08, {}], ["bike", 0.78, 0.08, {}], ["bike", 0.88, 0.08, {}],
     ["bench2", 0.45, 0.5, { c: 0x6B5A4A }], ["bench2", 0.72, 0.5, { c: 0x6B5A4A }],
     ["plant", 0.3, 0.5, { seed: 2 }], ["plant", 0.88, 0.5, { seed: 5 }],
@@ -333,7 +333,7 @@ NOVUM.interiors = {
     ["bunting", 0.5, 0.0, {}],
     ["plant", 0.3, 0.06, { seed: 2 }], ["plant", 0.5, 0.06, { seed: 7 }], ["plant", 0.7, 0.06, { seed: 4 }],
     ["bench2", 0.38, 0.45, { c: 0x6F8090 }], ["bench2", 0.62, 0.45, { c: 0x6F8090 }],
-    ["vending", 0.95, 0.25, { rot: -90 }], ["vending", 0.95, 0.4, { rot: -90 }],
+    ["vending", 0.95, 0.25, { rot: -90 }], ["vending", 0.95, 0.4, { rot: -90 }], ["arcade", 0.95, 0.56, { rot: -90 }],
     ["streetlamp", 0.2, 0.85, {}], ["streetlamp", 0.8, 0.85, {}]
   ] },
 
@@ -357,7 +357,8 @@ NOVUM.interiors = {
     ["bench2", 0.27, 0.42, { c: 0x6B5A4A, rot: 90 }], ["bench2", 0.73, 0.42, { c: 0x6B5A4A, rot: -90 }],
     ["flowers", 0.34, 0.22, {}], ["flowers", 0.66, 0.22, {}], ["flowers", 0.34, 0.62, {}], ["flowers", 0.66, 0.62, {}],
     ["bush", 0.05, 0.38, {}], ["bush", 0.95, 0.38, {}],
-    ["streetlamp", 0.4, 0.85, {}], ["streetlamp", 0.6, 0.85, {}]
+    ["streetlamp", 0.4, 0.85, {}], ["streetlamp", 0.6, 0.85, {}],
+    ["swing", 0.2, 0.84, {}], ["picnic", 0.8, 0.85, {}]
   ] },
   "諾文生活區": { outdoor: true, theme: { ground: "tile" }, items: [
     ["board", 0.5, 0.0, {}],
@@ -393,7 +394,8 @@ NOVUM.interiors = {
     ["streetlamp", 0.12, 0.3, {}], ["streetlamp", 0.5, 0.3, {}], ["streetlamp", 0.88, 0.3, {}],
     ["rocks", 0.06, 0.22, {}], ["rocks", 0.94, 0.22, {}],
     ["tree", 0.12, 0.72, { seed: 4 }], ["tree", 0.88, 0.72, { seed: 5 }],
-    ["flowers", 0.35, 0.66, {}], ["flowers", 0.65, 0.66, {}], ["bush", 0.5, 0.7, {}]
+    ["flowers", 0.35, 0.66, {}], ["flowers", 0.65, 0.66, {}], ["bush", 0.5, 0.7, {}],
+    ["viewer", 0.62, 0.2, { rot: 180 }], ["picnic", 0.22, 0.58, {}]
   ] },
   "諾文地下湖": { dark: true, outdoor: true, theme: { ground: "cave" }, items: [
     ["water", 0.5, 0.3, { w: 16.4, d: 7.6 }],
