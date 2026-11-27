@@ -665,6 +665,28 @@
     };
   }
 
+  /* 貼著某面牆的家具算那面牆的一部分：掛牆的裝飾一律算；其他東西要離牆 0.2 公尺內而且高過 1.1 公尺（書櫃、衣櫃這種） */
+  const WALLHANG = /^(frames|wallshelf|sconce|pans|mirror|clock|poster|map|board|hangplant|banners|herbs|dryplant|graffiti|gears|lights|lanterns|bunting|stars|caseboard|chimes|clippings|labelwall|ledstrip|lifebuoy|menuboard|mount|net|starwall|toolwall|sign|butterflies)$/;
+  function withWallItems(sideOf, items, W, D, th) {
+    const nx = Math.round(W / V), nz = Math.round(D / V), x0 = -Math.round(W / 2 / V), z0 = -Math.round(D / 2 / V), x1 = x0 + nx, z1 = z0 + nz;
+    const cw = th.cut ? Math.round(th.cut[0] / V) : 0, cd = th.cut ? Math.round(th.cut[1] / V) : 0;
+    const own = new Map();
+    for (const it of items) {
+      let a = 1e9, b = -1e9, c = 1e9, d = -1e9, top = -1e9;
+      for (const [x, y, z] of it.vox) { if (x < a) a = x; if (x > b) b = x; if (z < c) c = z; if (z > d) d = z; if (y > top) top = y; }
+      const near = [["L", a - x0], ["B", c - z0], ["R", x1 - 1 - b], ["F", z1 - 1 - d]];
+      if (cw) { if (c < z0 + cd && b >= x1 - cw - 6 && b <= x1 - cw - 2) near.push(["R", x1 - cw - 2 - b]); if (a >= x1 - cw && c >= z0 + cd) near.push(["B", c - (z0 + cd)]); }
+      // 長邊沿著哪個方向，就是貼哪一種牆（左右長→後牆或前牆，前後長→左牆或右牆）；差不多方的都可以
+      const wx = b - a, wz = d - c, cand = near.filter(([k]) => wx > wz * 1.5 ? (k === "B" || k === "F") : wz > wx * 1.5 ? (k === "L" || k === "R") : true);
+      cand.sort((p, q) => p[1] - q[1]);
+      if (!cand.length) continue;
+      const [side, dist] = cand[0];
+      if (!(WALLHANG.test(it.type) ? dist <= 4 : dist <= 2 && top >= 11)) continue;
+      for (const [x, y, z] of it.vox) own.set(x + "," + y + "," + z, side);
+    }
+    return (x, y, z) => sideOf(x, y, z) || (y >= 0 ? own.get(x + "," + y + "," + z) || null : null);
+  }
+
   /* ── 天花板主燈 ──
    * dome 碗型吊燈、chandelier 燭台吊燈、flush 吸頂燈、lantern 紙燈籠、bulbs 燈泡串、industrial 工業風燈罩
    * 燈光是柔和的點光（不投影子），所以不會有從上往下打的硬陰影 */
@@ -843,6 +865,7 @@
    * spec：[type, u, v, o]；place(u, v) 換算成公尺；colOf 處理 "owner:名字" 這種顏色 */
   function build(T, W, D, spec, theme, place, colOf, opt2) {
     const G = new Grid(), lights = [];
+    const wallItems = [];   // 每件家具的方塊：貼牆的東西（掛畫、層架、高櫃…）跟著那面牆一起變透明
     shell(G, W, D, theme);
     // 天花板主燈：小房間一盞、中房間兩盞、大房間四盞
     if (!theme.outdoor && theme.pendant !== false) {
@@ -877,6 +900,7 @@
       const wo = ctx.winOn; ctx.winOn = false; const ok = footFree(ctx, cols, kindOf(type), 0); ctx.winOn = wo;
       if (!ok && type !== "oillamp") { ctx.clash.push(type); if (N.DEBUGCLASH) console.log("clash", type, x, z, JSON.stringify(o), JSON.stringify(cols.slice(0, 3))); }
       for (const v of Gt.m.values()) G.set(v.x, v.y, v.z, v.c, v.f);
+      if (!theme.outdoor) wallItems.push({ type, vox: [...Gt.m.values()].map(v => [v.x, v.y, v.z]) });
       addFurn(ctx, cols);
       const [u, v] = toUV(x, z);
       res[i].push([type, u, v, o]);
@@ -914,7 +938,7 @@
     const out = [].concat(...res);
     const occ = occupancy(G, W, D);
     // 娃娃屋：家具擺好之後才補右牆、前牆（不影響擺放和走路的格子），四面牆分開成網格，擋到鏡頭的那面可以變透明
-    const sideOf = theme.outdoor ? null : outerWalls(G, W, D, theme);
+    const sideOf = theme.outdoor ? null : withWallItems(outerWalls(G, W, D, theme), wallItems, W, D, theme);
     const ms = opt2 && opt2.noMesh ? {} : toMeshes(T, G, { side: sideOf });
     return { meshes: ms, grid: G, lights, occ, spec: out, clash: ctx.clash, topAt: (x, z, maxY) => topAt(G, x, z, maxY) };
   }

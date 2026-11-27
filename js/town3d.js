@@ -3434,7 +3434,7 @@
     const a = Math.PI / 4 + (RM.azC || 0), dx = Math.sin(a), dz = Math.cos(a);
     for (const w of RM.walls) {
       const dot = w.n[0] * dx + w.n[1] * dz, k = Math.max(0, Math.min(1, (dot - 0.12) / 0.38));
-      const want = RFP.on ? 1 : 1 - 0.92 * k;
+      const want = RFP.on ? 1 : 1 - 0.97 * k;
       w.op += (want - w.op) * Math.min(1, dt * 7);
       if (Math.abs(w.op - want) < 0.004) w.op = want;
       const tr = w.op < 0.995;
