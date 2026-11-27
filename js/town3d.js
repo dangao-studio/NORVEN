@@ -768,7 +768,7 @@
         for (let i = 0; i < 5; i++) fb(g, 0.6, 0.12, 0.16, 0x8E6A45, 0, i * 0.12, -i * 0.16);
         fb(g, 0.04, 0.6, 0.8, 0x6B4E3A, 0.3, 0.3, -0.32);
         break;
-      case "hammock": sp.push({ x: 0, z: 0, pose: "lie", tag: "sleep", y: 0.5, owner: o.owner }); break;
+      case "hammock": sp.push({ x: 0.12, z: 0, pose: "lie", tag: "sleep", y: 0.5, owner: o.owner, face: -Math.PI / 2 }); break;   // 吊床是左右長（x 方向），枕頭在 +x：躺的人轉 90 度，頭朝枕頭；身體比吊床長，往枕頭那邊挪一點讓兩頭差不多
       case "computer": sp.push({ x: 0, z: 0.6, pose: "sit", tag: "study", y: 0.42 }); break;
       case "gamechair": case "readchair": sp.push({ x: 0, z: 0.05, pose: "sit", tag: "relax", y: 0.42 }); break;
       case "magicdesk": sp.push({ x: 0, z: 0.55, pose: "sit", tag: "study", y: 0.42 }); break;
