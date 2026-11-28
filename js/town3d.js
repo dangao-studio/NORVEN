@@ -35,11 +35,27 @@
   /* ═════════ 畫質 ═════════
    * 高畫質（電腦）：10 公分一格的城市建築（voxcity.js）；一般（手機）：原本簡化的方塊小鎮（voxtown.js）。
    * 設定存在 localStorage「novum-quality」：auto／high／low。auto＝滑鼠操作而且螢幕夠寬才開高畫質。 */
+  const isPhone = () => !(window.matchMedia && matchMedia("(pointer:fine)").matches && Math.max(screen.width, screen.height) >= 1000);
   function quality() {
     let q = "auto"; try { q = localStorage.getItem("novum-quality") || "auto"; } catch (e) { }
     if (q === "high" || q === "low" || q === "mobile") return q;
-    return window.matchMedia && matchMedia("(pointer:fine)").matches && Math.max(screen.width, screen.height) >= 1000 ? "high" : "low";   // 手機（要在小鎮頁切到 3D 才會開）：簡化小鎮，房間用一般畫質
+    return isPhone() ? "low" : "high";   // 手機（要在小鎮頁切到 3D 才會開）：簡化小鎮，房間用一般畫質
   }
+  // 手機開高畫質：城市模型很大，記憶體不夠時瀏覽器會直接把分頁關掉、重新整理，一開又是高畫質，就一直壞下去。
+  // 開始蓋 3D 前先記一筆「正在載入」，順利畫出來後再擦掉；下次打開還看得到這筆，表示上次在載入時當掉了，就自動降一級。
+  const BOOT = "novum-3d-boot", STEP = { high: "mobile", mobile: "low" }, QNAME = { mobile: "輕量城市", low: "簡化小鎮" };
+  let qNote = "";
+  function stepDown(q, why) {
+    const nq = STEP[q]; if (!nq) return false;
+    try { localStorage.setItem("novum-quality", nq); localStorage.setItem("novum-quality-note", why + "，已經自動換成「" + QNAME[nq] + "」。想再試可以到設定改回來。"); } catch (e) { return false; }
+    return true;
+  }
+  try {
+    const b = JSON.parse(localStorage.getItem(BOOT) || "null");
+    localStorage.removeItem(BOOT);
+    if (b && isPhone() && b.q === quality() && Date.now() - b.t < 3 * 60000) stepDown(b.q, "上次載入 3D 小鎮時手機記憶體不夠");
+    qNote = localStorage.getItem("novum-quality-note") || ""; localStorage.removeItem("novum-quality-note");
+  } catch (e) { }
   // HQ：用城市建築（電腦高畫質、手機城市都是）；MQ：手機城市（同樣的建築和夜景，但範圍小、光源少、後製簡單）
   const MQ = () => !!N.voxCity && quality() === "mobile";
   const HQ = () => !!N.voxCity && (quality() === "high" || MQ());
@@ -1323,7 +1339,12 @@
   async function build(onP) {
     await breathe(onP, 0.04, "整理街道……");
     renderer = new T.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "low-power" });
-    renderer.setPixelRatio(perf.ratio = Math.min(window.devicePixelRatio || 1, MQ() ? 1.25 : 1.75));
+    renderer.setPixelRatio(perf.ratio = Math.min(window.devicePixelRatio || 1, MQ() ? 1.25 : isPhone() ? 1.5 : 1.75));
+    // 手機的記憶體被用光時，畫面會整個消失（WebGL 被系統收回）：高畫質就降一級重新載入，其他畫質讓它自己恢復
+    renderer.domElement.addEventListener("webglcontextlost", e => {
+      e.preventDefault();
+      if (isPhone() && stepDown(quality(), "手機記憶體不夠，畫面撐不住")) { try { localStorage.removeItem(BOOT); } catch (er) { } location.reload(); }
+    });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = T.PCFSoftShadowMap;
     renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;   // 影子只在太陽換角度時重算
@@ -1338,7 +1359,8 @@
     moonFill = new T.DirectionalLight(0x8090D0, 0); moonFill.position.set(-30, 40, -20); scene.add(moonFill);
     sun = new T.DirectionalLight(0xFFF4E0, 0.9);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(MQ() ? 1024 : HQ() ? 4096 : 2048, MQ() ? 1024 : HQ() ? 4096 : 2048);
+    const SM = MQ() ? 1024 : HQ() && !isPhone() ? 4096 : 2048;   // 4096 的影子圖要吃掉一百多 MB，手機最多 2048
+    sun.shadow.mapSize.set(SM, SM);
     const sc = sun.shadow.camera, SR = HQ() ? 58 : 64; sc.left = -SR; sc.right = SR; sc.top = SR; sc.bottom = -SR; sc.near = 1; sc.far = 220;
     sun.shadow.bias = -0.0008;
     scene.add(sun); scene.add(sun.target);
@@ -4197,7 +4219,12 @@
     hooks = h || {};
     return loadThree().then(three => {
       T = three;
-      if (!buildP) buildP = build(hooks.onProgress);
+      if (!buildP) {
+        try { localStorage.setItem(BOOT, JSON.stringify({ q: quality(), t: Date.now() })); } catch (e) { }
+        buildP = build(hooks.onProgress);
+        // 蓋好之後再多畫幾秒都沒事，才算真的撐得住
+        buildP.then(() => setTimeout(() => { try { localStorage.removeItem(BOOT); } catch (e) { } }, 8000), () => { try { localStorage.removeItem(BOOT); } catch (e) { } });
+      }
       return buildP;
     }).then(() => {
       host = el;
@@ -4950,6 +4977,6 @@
   };
 
   N.town3d_debug = () => ({ scene, wPath, routeTo, cars, roadNet: () => roadNet, groundAt, COAST, walkGrid, alleyOf, ENTR, camera, FP, GRID, cam, TC, WG, walkers, lots, RM, occAt, cellOf, roomPath, buildRoom, GM, buildGroundMap, entryOf });
-  N.town3d = { rotate: a => { cam.fly = null; const a0 = cam.az, t0 = performance.now(); const step = () => { const k = Math.min(1, (performance.now() - t0) / 350); cam.az = a0 + a * (1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); }; step(); }, setAnomaly, supported, mount, unmount, update, say, emote: townEmote, focus, flyRegion, flyLoc, setLabels, setXray, setDirector, home, pause,
+  N.town3d = { qualityNote: () => { const t = qNote; qNote = ""; return t; }, rotate: a => { cam.fly = null; const a0 = cam.az, t0 = performance.now(); const step = () => { const k = Math.min(1, (performance.now() - t0) / 350); cam.az = a0 + a * (1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(step); }; step(); }, setAnomaly, supported, mount, unmount, update, say, emote: townEmote, focus, flyRegion, flyLoc, setLabels, setXray, setDirector, home, pause,
     isFollowing: () => cam.follow, unfollow: () => { cam.follow = null; }, isReady: () => built, ctl: tCtl, photo };
 })();

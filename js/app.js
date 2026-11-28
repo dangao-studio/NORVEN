@@ -4,7 +4,7 @@
   const N = NOVUM, E = N.engine;
   const KEY = "novum-town";
   const SCHEMA = 1;
-  const VERSION = "3.28.0";
+  const VERSION = "3.28.1";
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const pad = n => String(n).padStart(2, "0");
@@ -284,9 +284,9 @@
   }
   const genericPerson = (size) => `<svg class="pi" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.4" r="4.3" fill="currentColor"/><path d="M3.8 21.6c0-4.8 3.7-8.2 8.2-8.2s8.2 3.4 8.2 8.2z" fill="currentColor"/></svg>`;
   let toastTimer = null;
-  function toast(msg) {
+  function toast(msg, ms) {
     const t = $("#toast"); t.textContent = msg; t.hidden = false;
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2200);
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms || 2200);
   }
 
   /* ═════════ 街區圖底圖（SVG） ═════════ */
@@ -512,6 +512,7 @@
     N.town3d.mount(box, { onChar: showCard3d, onLoc: id => openLocation(id), onEmpty: hideCard3d, onProgress }).then(() => {
       const l = $("#t3dLoading"); if (l) l.remove();
       if (N.splash) N.splash.done();
+      const qn = N.town3d.qualityNote && N.town3d.qualityNote(); if (qn) toast(qn, 6000);
       N.town3d.setLabels(store.ui.labels3d !== false);
       N.town3d.onSay = showCaption;
       N.town3d.update(state3d(clockNow()));
@@ -2651,7 +2652,7 @@
       </section>
       <section>
         <h4>3D 畫質</h4>
-        <p class="muted" style="margin:0 0 8px">高畫質是完整的城市、光影和夜景；輕量城市是同樣的建築和夜景，範圍小一點、光影簡單一點（電腦比較舊時用）；簡化小鎮是最早的方塊小鎮。自動：電腦用高畫質，手機用簡化小鎮（比較省電、不容易因為記憶體不夠被關掉）。手機想看完整街景可以選輕量城市。換了之後會重新載入。</p>
+        <p class="muted" style="margin:0 0 8px">高畫質是完整的城市、光影和夜景；輕量城市是同樣的建築和夜景，範圍小一點、光影簡單一點（電腦比較舊時用）；簡化小鎮是最早的方塊小鎮。自動：電腦用高畫質，手機用簡化小鎮（比較省電、不容易因為記憶體不夠被關掉）。手機想看完整街景可以選輕量城市；手機選高畫質很吃記憶體，如果載不動會自動退回輕量城市。換了之後會重新載入。</p>
         <div class="seg">${[["auto", "🪄 自動"], ["high", "✨ 高畫質"], ["mobile", "🏙️ 輕量城市"], ["low", "🧊 簡化小鎮"]].map(([v, t]) => { let q = "auto"; try { q = localStorage.getItem("novum-quality") || "auto"; } catch (e) { } return `<button type="button" data-quality="${v}" class="${q === v ? "on" : ""}">${t}</button>`; }).join("")}</div>
       </section>
       <section>
