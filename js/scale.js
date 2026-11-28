@@ -14,4 +14,8 @@
   };
   let k = ""; try { k = (localStorage.getItem("novum-scale") || "").toUpperCase(); } catch (e) { }
   N.SC = Object.assign({ key: P[k] ? k : "" }, P[k] || P[""]);
+  // 家具整體大小：localStorage "novum-furn"（例如 1.2），地板類（地毯、小路、水面、平台、鐘塔）不跟著變
+  let f = 1; try { f = parseFloat(localStorage.getItem("novum-furn")) || 1; } catch (e) { }
+  N.SC.furn = Math.max(0.6, Math.min(1.6, f));
+  N.SC.noFurnK = /^(rug|path|water|platform|rails|clocktower|dock|ritual|stairs)$/;
 })();

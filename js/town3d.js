@@ -3190,8 +3190,9 @@
     const out = [], dummy = new T.Group();
     for (const [type, u, v, o0] of vr.spec) {
       const o = o0 || {}, [x, z] = place(u, v), a = (o.rot || 0) * Math.PI / 180;
+      const fk = N.SC && N.SC.furn && !N.SC.noFurnK.test(type) ? N.SC.furn : 1;   // 家具放大縮小時，座位也跟著往外／往內
       for (const sp of furn(type, o, dummy)) {
-        const wx = x + sp.x * Math.cos(a) + sp.z * Math.sin(a), wz = z - sp.x * Math.sin(a) + sp.z * Math.cos(a);
+        const sx = sp.x * fk, sz = sp.z * fk, wx = x + sx * Math.cos(a) + sz * Math.sin(a), wz = z - sx * Math.sin(a) + sz * Math.cos(a);
         const top = (sp.pose === "sit" || sp.pose === "lie") ? vr.topAt(wx, wz, sp.pose === "lie" ? 0.8 : 0.75) : 0;
         out.push({ x: wx, z: wz, pose: sp.pose, tag: sp.tag, y: top > 0.15 ? top : sp.y, owner: sp.owner, yaw: a + faceOf(sp), use: sp.use, anim: sp.anim });
       }

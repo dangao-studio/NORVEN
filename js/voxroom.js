@@ -1006,6 +1006,8 @@
       B.light = (lx, ly, lz, col, pw) => B0.light(lx, ly + dy, lz, col, pw);
       B.paint = B0.paint;
     }
+    const FK = N.SC && N.SC.furn && !N.SC.noFurnK.test(type) ? N.SC.furn : 1;
+    if (FK !== 1) o = Object.assign({}, o, { k: (o.k || 1) * FK });
     if (o.k && o.k !== 1) {   // 整件放大縮小（戶外的樹、路燈、噴水池照真實大小）
       const B1 = B, k = o.k;
       B = (w, h, d, c, bx, y, bz, f, pat) => B1(w * k, h * k, d * k, c, (bx || 0) * k, (y || 0) * k, (bz || 0) * k, f, pat);
