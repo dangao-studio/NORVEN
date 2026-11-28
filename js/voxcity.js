@@ -6,7 +6,7 @@
 (function () {
   "use strict";
   const N = window.NOVUM = window.NOVUM || {};
-  const V = 0.1, FH = 30;
+  const V = 0.1, FH = 30, DT = (N.SC && N.SC.door) || 25;   // DT：歐式大門頂（格），比例預覽會改
   const F_GLOW = 1, F_WIN = 2, F_BLINK = 4, F_TICK = 8, F_HOLO = 16, F_FLOW = 32;   // HOLO：全息投影（半透明、閃）；FLOW：魔力管線（光在裡面流）   // TICK：會捲動的跑馬燈   // BLINK：屋頂天線的紅色航空燈（一閃一閃）
   const hashI = (a, b, c) => { let h = (a * 73856093) ^ (b * 19349663) ^ (c * 83492791); h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
   const H = hashI;
@@ -328,7 +328,7 @@
     if (st === "E") {
       if (ground) {
         const dx = doorX - 5;
-        for (let i = 0; i < 10; i++) for (let j = 4; j < 25; j++) G.set(dx + i, j, zf, i === 0 || i === 9 || j === 24 ? p.frame : (i === 5 ? 0x5A3A22 : p.door), 0);
+        for (let i = 0; i < 10; i++) for (let j = 4; j < DT; j++) G.set(dx + i, j, zf, i === 0 || i === 9 || j === DT - 1 ? p.frame : (i === 5 ? 0x5A3A22 : p.door), 0);
         for (const sx of away) win(G, sx - 6, 9, zf, 12, 13, p.frame, 0xF8E2A8, true);
         if (p.awning) for (let x = x0 + 1; x < x1 - 1; x++) for (let k = 0; k < 8; k++) { const y = 28 - Math.floor(k * 0.6), c = ((x - x0) >> 2) % 2 ? p.awning : 0xF4F0E8; G.set(x, y, z1 + k, c, 0); if (k === 7) G.set(x, y - 1, z1 + k, c, 0); }
         G.set(dx - 2, 18, z1, 0x2E3238, 0); G.set(dx - 2, 17, z1, 0xFFC878, F_GLOW); lamps.push([(dx - 2) * V, (z1 + 1) * V, 0xFF9A48]);
@@ -342,7 +342,7 @@
       if (ground) {
         for (let x = x0 + 2; x < x1 - 2; x++) for (let y = 4; y < 24; y++) {
           const open = (x - x0) % 6 !== 0 && H(x >> 1, 3, 1) < 0.4 && y > 8 && y < 20 && Math.abs(x - doorX) > 3;
-          const isDoor = Math.abs(x - doorX) <= 3 && y < 22;
+          const isDoor = Math.abs(x - doorX) <= 3 && y < DT - 3;
           if (isDoor) { G.del(x, y, zf); if (y === 4) G.set(x, y, zf, 0x5A3A26, 0); continue; }
           if (open) { G.del(x, y, zf); G.set(x, y, zf - 1, 0xFFD890, F_WIN); }
           else G.set(x, y, zf, (x - x0) % 6 === 0 ? 0x5A1E16 : y % 6 === 0 ? 0x6A2A1E : 0x8A3A26, 0);
@@ -357,7 +357,7 @@
     } else if (st === "J") {
       if (ground) {
         const dx = doorX - 6;
-        for (let i = 0; i < 12; i++) for (let j = 4; j < 22; j++) G.set(dx + i, j, zf, i % 2 ? 0x3A2418 : 0xF4E4C0, i % 2 ? 0 : F_WIN);
+        for (let i = 0; i < 12; i++) for (let j = 4; j < DT - 3; j++) G.set(dx + i, j, zf, i % 2 ? 0x3A2418 : 0xF4E4C0, i % 2 ? 0 : F_WIN);
         for (let i = 0; i < 12; i++) for (let j = 15; j < 22; j++) if (i % 4 !== 3) G.set(dx + i, j, z1, j === 18 && (i === 5 || i === 6) ? 0xF4F0E8 : (p.noren || 0x2E3E6A), 0);
         for (const sx of away) for (let i = 0; i < 10; i++) for (let j = 0; j < 10; j++) { if (i % 2) G.set(sx - 5 + i, 9 + j, z1, 0x3A2418, 0); G.set(sx - 5 + i, 9 + j, zf, 0xF4E4C0, F_WIN); }
         paperLantern(G, dx - 3, 14, z1 + 1, lamps);
@@ -369,7 +369,7 @@
     } else if (st === "Y") {
       if (ground) {
         for (let x = x0 + 2; x < x1 - 2; x++) for (let y = 4; y < 22; y++) {
-          if (Math.abs(x - doorX) <= 4) { G.set(x, y, zf, y > 20 ? 0x2A2C32 : (x === doorX ? 0x2A2C32 : 0x9AE8F0), y > 20 || x === doorX ? 0 : F_WIN); continue; }
+          if (Math.abs(x - doorX) <= 4) { G.set(x, y, zf, y > DT - 5 ? 0x2A2C32 : (x === doorX ? 0x2A2C32 : 0x9AE8F0), y > 20 || x === doorX ? 0 : F_WIN); continue; }
           G.set(x, y, zf, y % 2 ? 0x7A808A : 0x6A7078, 0);
         }
         // 店面上方：一塊彩色的招牌（顏色每家不同）

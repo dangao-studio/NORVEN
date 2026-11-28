@@ -1037,7 +1037,7 @@
     }
   }
   // 戶外的東西照真實大小（人 1.6 公尺）：樹 4～5 公尺、路燈 3.7 公尺、噴水池 3 公尺寬…
-  const OUTK = { tree: 2.6, streetlamp: 1.6, fountain: 2, stonelamp: 1.3, well: 1.4, bush: 1.5, flowers: 1.3, newsstand: 1.25, stall: 1.4, rocks: 1.4, plant: 1.4 };
+  const OUTK = { tree: (N.SC && N.SC.outTree) || 2.6, streetlamp: (N.SC && N.SC.outLamp) || 1.6, fountain: 2, stonelamp: 1.3, well: 1.4, bush: 1.5, flowers: 1.3, newsstand: 1.25, stall: 1.4, rocks: 1.4, plant: 1.4 };
   const rotXZ = (rot, x, z) => { const q = Math.round((((rot || 0) % 360 + 360) % 360) / 90) % 4; return q === 0 ? [x, z] : q === 1 ? [z, -x] : q === 2 ? [-x, -z] : [-z, x]; };
   // 背面朝牆的家具：離牆不到 1 公尺就往後推到貼牆
   const WALLY = /^(bed|desk|magicdesk|computer|shelf|vanity|sideboard|curio|clothes|fireplace|stove|oven|fridge|breadrack|filing|lockers|vending|herbs|scrolls|radios|display|altar|dimbox|piano|servers|record|typewriter|arcade|kettle|claw)$/;

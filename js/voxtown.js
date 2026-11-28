@@ -90,10 +90,11 @@
     blob(x + 1, 4, z + 1, 1.6, 1.4, 1.6, (a, b, c) => hash(a, b, c) < 0.3 ? pick(FLW, a, b, c) : 0x5A8634, 0);
   }
   function lampPost(x, z, gas, lamps) {
-    box(x, 1, z, x + 1, 22, z + 1, gas ? 0x2E2A26 : C.iron); box(x - 1, 1, z - 1, x + 2, 2, z + 2, C.iron);
-    for (let a = x - 1; a < x + 2; a++) for (let c = z - 1; c < z + 2; c++) for (let b = 22; b < 25; b++) light(a, b, c);
-    box(x - 1, 25, z - 1, x + 2, 26, z + 2, gas ? 0x2E2A26 : C.iron);
-    if (gas) set(x, 26, z, 0x2E2A26);
+    const LH = (N.SC && N.SC.lamp) || 22;
+    box(x, 1, z, x + 1, LH, z + 1, gas ? 0x2E2A26 : C.iron); box(x - 1, 1, z - 1, x + 2, 2, z + 2, C.iron);
+    for (let a = x - 1; a < x + 2; a++) for (let c = z - 1; c < z + 2; c++) for (let b = LH; b < LH + 3; b++) light(a, b, c);
+    box(x - 1, LH + 3, z - 1, x + 2, LH + 4, z + 2, gas ? 0x2E2A26 : C.iron);
+    if (gas) set(x, LH + 4, z, 0x2E2A26);
     if (lamps) lamps.push([x + 0.5, z + 0.5]);
   }
   function bench(x, z, ax) {
@@ -508,8 +509,10 @@
       }
       else {
         box(x - 2, 2, z - 2, x + 3, 3, z + 3, (a, b, c) => (a === x - 2 || a === x + 2 || c === z - 2 || c === z + 2) ? C.curb : C.soil);
-        box(x, 3, z, x + 1, 17, z + 1, C.trunk);
-        blob(x + 0.5, 18, z + 0.5, 4.5, 3.8, 4.5, (a, b, c) => pick(info.reg === "oldtown" ? [0x5A7A3A, 0x4E6E34, 0x667F40] : C.leaf, Math.floor(a / 3), Math.floor(b / 3), Math.floor(c / 3)));
+        const tk = (N.SC && N.SC.tree) || 1, th = Math.round(17 * tk);
+        box(x, 3, z, x + 1, th, z + 1, C.trunk);
+        const ck = 1 + (tk - 1) * 0.35;   // 樹冠只稍微變大，主要是樹幹拉高（不然會擋住走在人行道上的人）
+        blob(x + 0.5, th + 1, z + 0.5, 4.5 * ck, 3.8 * ck, 4.5 * ck, (a, b, c) => pick(info.reg === "oldtown" ? [0x5A7A3A, 0x4E6E34, 0x667F40] : C.leaf, Math.floor(a / 3), Math.floor(b / 3), Math.floor(c / 3)));
       }
     };
     let i = 0;

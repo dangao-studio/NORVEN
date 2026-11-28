@@ -150,7 +150,7 @@
   const GRID = (() => {
     const BW = 14, BD = 21, NC = 6, NR = 5, RC = 84;
     // 路寬：廣場旁的大道 9.5、其他街 6.5；兩邊人行道各 1.75（街區邊往外 0.3 開始）
-    const AW = 9.5, NW = 6.5, SIDEW = 2.05, ROADE = AW / 2 + 0.1;
+    const SCp = N.SC || {}, AW = SCp.aw || 9.5, NW = SCp.nw || 6.5, SIDEW = 2.05, ROADE = AW / 2 + 0.1;
     const gx = i => (i === 0 || i === 1) ? AW : NW, gz = j => (j === 0 || j === 1) ? AW : NW;
     const colX = {}, rowZ = {};
     colX[0] = 0; for (let i = 1; i <= NC; i++) colX[i] = colX[i - 1] + BW + gx(i); for (let i = -1; i >= -NC; i--) colX[i] = colX[i + 1] - gx(i + 1) - BW;
@@ -261,7 +261,7 @@
   const blockOf = l => isPlaza(l) ? [GRID.plaza.x, GRID.plaza.z] : BLOCK[l.region + l.page];
   // 地下湖搬到城邊那一格：洞口朝南（朝海邊步道），lot 中心在洞口後面一點
   const lakeMoved = l => !!(l && GRID.lakeCell && /地下湖/.test(l.id));
-  const LAKE = { K: 1.5, door: 1.6, mouth: 1.4, back: 3.6 };   // 洞口模型放大 1.5 倍；門口、洞口、隧道底（單位，相對 lot 中心往 +z）
+  const LAKE = { K: (N.SC && N.SC.lakeK) || 1.5, door: 1.6, mouth: 1.4, back: 3.6 };   // 洞口模型放大 1.5 倍；門口、洞口、隧道底（單位，相對 lot 中心往 +z）
   function lotPos(l) {
     if (lakeMoved(l)) return { x: GRID.lakeCell.x + 7, z: GRID.lakeCell.z + 16 };
     if (isPlaza(l)) return { x: GRID.plaza.x + 7, z: GRID.plaza.z + 7 };   // 鐘塔廣場：正中間那一整格
@@ -1136,7 +1136,7 @@
     const wq = emojiSprite("💭", 0.85); wq.position.set(-0.55, 2.2, 0); wq.visible = false; g.add(wq);   // 有心事想找玩家說
     const name = textSprite(c.id, { size: 26, bg: "rgba(24,27,38,.78)", fg: "#fff", pad: 10, h: 0.5 });
     name.position.y = 0.0; name.center.set(0.5, 1.2); name.visible = false; g.add(name);
-    g.scale.set(1.45, 1.45, 1.45); g.userData.isWalker = true;
+    const WS = 1.45 * ((N.SC && N.SC.person) || 1); g.scale.set(WS, WS, WS); g.userData.isWalker = true;
     root.add(g);
     // 比例：小鎮 1 單位 = 1.6 公尺，人 1.6 公尺 → 1 單位高
     const ch = chibiFor(c.id, 0.431, g);
@@ -3034,7 +3034,7 @@
         else if (pose === "sit") { w.body.rotation.set(0, 0, 0); w.body.scale.set(1, 0.62, 1); w.body.position.set(0, 0.24, 0); w.head.position.set(0, 1.0, 0); }
         else { w.body.rotation.set(0, 0, 0); w.body.scale.set(1, 1, 1); w.body.position.set(0, 0.39, 0); w.head.position.set(0, 1.35, 0); }
       }
-      const sc0 = 1.45, sc = w.g.scale.x + (sc0 - w.g.scale.x) * Math.min(1, dtW * 5);
+      const sc0 = 1.45 * ((N.SC && N.SC.person) || 1), sc = w.g.scale.x + (sc0 - w.g.scale.x) * Math.min(1, dtW * 5);
       w.g.scale.set(sc, sc, sc);
       // 站著／走路：踩在地面高度上（上下人行道路緣時順順地抬腳，不會瞬間跳）
       const gy = groundAt(w.pos.x, w.pos.z); w.gy = w.gy == null || Math.abs(gy - w.gy) > 0.6 ? gy : w.gy + (gy - w.gy) * Math.min(1, dtW * 14);
